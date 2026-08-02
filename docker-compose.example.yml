@@ -17,7 +17,8 @@ services:
       - COMPUTE_TYPE=int8
       - THREADS=6
       - POLL_SECONDS=120
-      - REQUEST_TAGS=subs:en,subs:es,subs:auto
+      # Any subs:<lang> tag you create in Stash is picked up automatically.
+      # Set REQUEST_TAGS to a fixed list only if you want to restrict that.
       # Uncomment together with the ollama service below to enable
       # translation into languages Whisper cannot produce directly.
       # - OLLAMA_URL=http://ollama:11434

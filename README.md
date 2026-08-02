@@ -31,8 +31,9 @@ to map between the two.
 1. In Stash, select one or more scenes (checkbox in the top-left of each card).
 2. **Edit** → add a tag:
    - `subs:en` — English subtitles
-   - `subs:es` — Spanish subtitles
    - `subs:auto` — subtitles in whatever language is actually spoken
+   - `subs:<code>` — any language, see below
+
    You can add more than one; each produces its own file.
 3. Wait. The worker polls every 2 minutes and processes the queue one scene at
    a time.
@@ -40,11 +41,36 @@ to map between the two.
    (or `subs:failed`), and the containing folder is rescanned so the caption
    shows up in the player.
 
-The tags are created automatically on first run, so you don't need to make them
-by hand.
+Only `subs:en`, `subs:done` and `subs:failed` are created for you. To request
+another language, make the tag yourself — `subs:fr`, `subs:ja`, `subs:pl` —
+and it is picked up on the next poll. No restart, no configuration.
 
 Because the queue *is* a Stash filter, you can watch progress by browsing to the
 `subs:en` tag — the list shrinks as work completes.
+
+### Language codes
+
+Use a bare two- or three-letter ISO 639 code. `subs:pt` and `subs:por` both mean
+Portuguese and produce the same file.
+
+**Do not use a regional code like `subs:pt-BR` or `subs:en-US`.** Stash cannot
+parse a caption suffix that carries a region, so it treats `.pt-BR.srt` as part
+of the filename and the subtitle silently never attaches to the scene — the file
+is written and nothing appears in the player. The worker refuses these and tells
+you which code to use instead:
+
+```
+tag subs:pt-BR ignored: Stash cannot attach captions with a regional subtag
+('.pt-BR.srt' is parsed as part of the filename, so the caption silently
+never attaches). Use subs:pt.
+```
+
+A tag that is not a language at all is reported differently, so you can tell a
+typo from a valid-but-unusable code. Both are logged once, when first seen,
+rather than on every poll.
+
+Whisper can transcribe 100 languages. Anything outside that set can still be
+reached by translating from the spoken language, which needs `OLLAMA_URL`.
 
 ## Status page
 
@@ -187,6 +213,9 @@ artefacts specific to your files.
 | `TRANSLATE_MODEL` | unset | Second Whisper model for speech→English, e.g. `large-v3` |
 | `OLLAMA_BATCH` | `20` | Subtitle lines per translation request |
 | `BEAM_SIZE` | `5` | Lower to `1` for ~2× speed at some accuracy cost |
+| `TAG_DISCOVERY` | `auto` | `false` pins the list to `REQUEST_TAGS` |
+| `CREATE_TAGS` | `subs:en` | Tags made at startup; others are yours to create |
+| `IGNORE_TAGS` | unset | `subs:` tags to skip entirely |
 
 Test with `DRY_RUN=1` on two or three scenes before letting it loose.
 

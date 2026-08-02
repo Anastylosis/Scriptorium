@@ -69,6 +69,14 @@ class ModelCfg:
 @dataclass(frozen=True)
 class TagsCfg:
     request: list = field(default_factory=lambda: ["subs:en", "subs:es", "subs:auto"])
+    # True when REQUEST_TAGS was actually set, so a user-narrowed list can be
+    # told apart from the built-in default.
+    request_explicit: bool = False
+    # auto: discover unless REQUEST_TAGS narrows the list deliberately.
+    discover: str = "auto"
+    # Made at startup. Other languages are created by the user on demand.
+    create: list = field(default_factory=lambda: ["subs:en"])
+    ignore: list = field(default_factory=list)
     done: str = "subs:done"
     failed: str = "subs:failed"
 
@@ -126,6 +134,10 @@ def from_env(env: Mapping[str, str] | None = None) -> Config:
         ),
         tags=TagsCfg(
             request=_list(env, "REQUEST_TAGS", ["subs:en", "subs:es", "subs:auto"]),
+            request_explicit=_get(env, "REQUEST_TAGS", None) is not None,
+            discover=_get(env, "TAG_DISCOVERY", "auto").lower(),
+            create=_list(env, "CREATE_TAGS", ["subs:en"]),
+            ignore=_list(env, "IGNORE_TAGS", []),
             done=_get(env, "DONE_TAG", "subs:done"),
             failed=_get(env, "FAILED_TAG", "subs:failed"),
         ),

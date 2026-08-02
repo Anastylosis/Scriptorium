@@ -53,6 +53,21 @@ class Client:
         log.info("created tag %s", name)
         return data["tagCreate"]["id"]
 
+    def find_tags_matching(self, pattern):
+        data = self.execute(
+            """query($p: String!) {
+                 findTags(tag_filter: {name: {value: $p, modifier: MATCHES_REGEX}},
+                          filter: {per_page: -1}) { tags { id name } }
+               }""",
+            {"p": pattern},
+        )
+        return data["findTags"]["tags"]
+
+    def all_tags(self):
+        data = self.execute(
+            "query { findTags(filter: {per_page: -1}) { tags { id name } } }")
+        return data["findTags"]["tags"]
+
     def find_tagged_scenes(self, tag_ids):
         # depth 0 deliberately does not descend the tag hierarchy.
         data = self.execute(

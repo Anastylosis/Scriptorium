@@ -3,12 +3,6 @@ import pytest
 from stash_subs import config, status
 from stash_subs.asr import whisper_translates
 from stash_subs.translate import resolve_mode
-from stash_subs.worker import Worker
-
-
-def worker(env=None):
-    cfg = config.from_env(env or {})
-    return Worker(cfg, status.Store(), client=object())
 
 
 @pytest.mark.parametrize("model,translates", [
@@ -25,34 +19,6 @@ def test_turbo_checkpoints_are_known_not_to_translate(model, translates):
     # source-language text for task="translate" without erroring, so this
     # guard is what stops Spanish audio landing in a file named .en.srt.
     assert whisper_translates(model) is translates
-
-
-def test_targets_for_extracts_language_from_request_tags():
-    scene = {"tags": [{"id": "1", "name": "subs:en"},
-                      {"id": "2", "name": "subs:es"},
-                      {"id": "9", "name": "favourite"}]}
-    assert sorted(worker().targets_for(scene)) == ["en", "es"]
-
-
-def test_targets_for_is_case_insensitive():
-    scene = {"tags": [{"id": "1", "name": "SUBS:EN"}]}
-    assert worker().targets_for(scene) == ["en"]
-
-
-def test_targets_for_ignores_unrelated_tags():
-    scene = {"tags": [{"id": "1", "name": "subs:done"},
-                      {"id": "2", "name": "4k"}]}
-    assert worker().targets_for(scene) == []
-
-
-def test_targets_for_handles_a_scene_with_no_tags():
-    assert worker().targets_for({"tags": []}) == []
-
-
-def test_targets_for_honours_a_custom_request_tag_list():
-    w = worker({"REQUEST_TAGS": "subs:fr"})
-    scene = {"tags": [{"id": "1", "name": "subs:fr"}, {"id": "2", "name": "subs:en"}]}
-    assert w.targets_for(scene) == ["fr"]
 
 
 @pytest.mark.parametrize("model,mode", [

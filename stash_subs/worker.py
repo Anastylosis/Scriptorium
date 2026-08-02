@@ -5,7 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import subtitles
+from . import langs, subtitles, tags
 from .asr import Models, whisper_translates
 from .audio import probe_duration
 from .paths import PathMapper
@@ -67,18 +67,17 @@ class Worker:
         self.mapper = PathMapper(cfg.stash.path_from, cfg.stash.path_to)
         self.models = Models(cfg.model)
         self.ollama = Ollama(cfg.ollama)
-        self.request_ids = {}
-        self.done_id = None
-        self.failed_id = None
+        self.discover, self._discover_note = tags.discovery_enabled(cfg.tags)
+        self.plan = tags.Plan()
 
     # -- setup ------------------------------------------------------------
 
     def bootstrap(self):
-        self.request_ids = {n: self.client.find_or_create_tag(n)
-                            for n in self.cfg.tags.request}
-        self.done_id = self.client.find_or_create_tag(self.cfg.tags.done)
-        self.failed_id = self.client.find_or_create_tag(self.cfg.tags.failed)
-        self.store.update(request_tags=list(self.request_ids))
+        done_id, failed_id = tags.bootstrap(self.client, self.cfg.tags)
+        self.done_id, self.failed_id = done_id, failed_id
+        if self._discover_note:
+            log.info("%s", self._discover_note)
+        self.refresh_plan()
 
         if not whisper_translates(self.cfg.model.name):
             if self.cfg.model.translate_model:
@@ -104,15 +103,33 @@ class Worker:
             log.info("OLLAMA_URL not set — only source-language and English "
                      "output are possible")
 
+    def refresh_plan(self):
+        if self.discover:
+            self.plan = tags.discover(self.client, self.cfg.tags,
+                                      self.done_id, self.failed_id,
+                                      previous=self.plan)
+        else:
+            self.plan = tags.fixed(self.client, self.cfg.tags,
+                                   self.done_id, self.failed_id)
+        self.store.update(request_tags=self.plan.names())
+        return self.plan
+
     # -- per scene --------------------------------------------------------
 
     def targets_for(self, scene):
+        """The languages this scene is asking for, by tag id.
+
+        Matched on id against the plan used for the query, not by re-parsing
+        names, so a tag created mid-scene cannot be mistaken for one we acted on.
+
+        Deduplicated: `subs:en` and `subs:eng` are different tags naming the
+        same language, and a scene carrying both should be transcribed once.
+        """
         wanted = []
-        requested = {n.lower() for n in self.cfg.tags.request}
         for t in scene["tags"]:
-            name = t["name"].lower()
-            if name in requested:
-                wanted.append(name.split(":", 1)[1])
+            req = self.plan.requests.get(t["id"])
+            if req is not None and req.lang not in wanted:
+                wanted.append(req.lang)
         return wanted
 
     def _progress(self, position):
@@ -157,7 +174,15 @@ class Worker:
 
     def produce(self, local, scene, src, target, cache, duration):
         cfg = self.cfg
-        lang = src if target == "auto" else target
+        lang = src if target == tags.AUTO else target
+
+        # Belt and braces: a tag was validated before it got here, but the
+        # `auto` target takes its language from Whisper's detector at runtime.
+        if not langs.is_caption_suffix(lang):
+            log.warning("  refusing to write .%s.srt: %s", lang,
+                        langs.reject_reason(lang))
+            return False
+
         dest = subtitles.dest_for(local, lang)
 
         if dest.exists() and not cfg.run.overwrite:
@@ -244,8 +269,7 @@ class Worker:
         list, and the poll-time snapshot can be an hour old on a long scene,
         so writing it back would clobber anything added meanwhile.
         """
-        req_ids = set(self.request_ids.values())
-        handled = {t["id"] for t in scene["tags"] if t["id"] in req_ids}
+        handled = {t["id"] for t in scene["tags"] if t["id"] in self.plan.requests}
         try:
             current = self.client.scene_tags(scene["id"]) or scene["tags"]
         except Exception:
@@ -265,7 +289,10 @@ class Worker:
                 self.control.sleep(1.0)
                 continue
             try:
-                scenes = self.client.find_tagged_scenes(self.request_ids.values())
+                # Re-read the tag set each poll so a language tag created
+                # since startup is honoured without a restart.
+                plan = self.refresh_plan()
+                scenes = self.client.find_tagged_scenes(plan.ids) if plan.ids else []
             except Exception as e:
                 log.error("could not reach Stash: %s", e)
                 self.store.update(status="error", stage=str(e)[:200],
