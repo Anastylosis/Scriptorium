@@ -276,11 +276,35 @@ silently shift your timings.
 Expect 10–25 minutes per scene on CPU with the 4B model. Worth batching
 overnight.
 
+### Translating a scene you already have subtitles for
+
+If a transcript in the spoken language is already sitting next to the video,
+it is used as the translation source and the audio is not transcribed again.
+Tagging `subs:pl` on an English scene that already has `clip.en.srt` costs a
+few seconds of language detection instead of several minutes of Whisper.
+
+That applies to any transcript, not only ones this tool wrote — a hand-made or
+downloaded one is usually a better source than a fresh machine transcript. Our
+own generation marker is stripped before translating, so it never gets fed to
+the LLM. Set `REUSE_TRANSCRIPT=0` to always transcribe from the audio;
+`REGENERATE=always` implies it, since that is a request to redo the work.
+
 ### If translation fails
 
 The source-language transcript is written *before* the translation step, so a
 failed or unavailable LLM still leaves you with a usable `.en.srt`. You lose the
 translation, not the transcription work.
+
+A DNS error like `Name or service not known` from the translation step means
+the worker cannot reach Ollama. The `ollama` service in the example compose
+sits behind a profile, so `docker compose up -d` does not start it:
+
+```sh
+docker compose --profile translate up -d
+```
+
+Setting `OLLAMA_URL` on its own is not enough. The same problem is reported at
+startup as `Ollama unreachable at ...`.
 
 ## Hallucination handling
 
@@ -310,6 +334,7 @@ artefacts specific to your files.
 | `ANNOTATE_GAP` | `1.0` | Pause after the last real cue |
 | `ANNOTATE_SIDECAR` | `0` | Also write `<subtitle>.stash-subs.json` |
 | `OUTPUT_FORMATS` | `srt` | `srt`, `vtt`, or `srt,vtt` |
+| `REUSE_TRANSCRIPT` | `1` | Translate from an existing transcript instead of re-transcribing |
 | `POLL_SECONDS` | `120` | Queue poll interval |
 | `HTTP_PORT` | `8088` | Status page port |
 | `OLLAMA_PULL` | `1` | Auto-pull the model at startup |

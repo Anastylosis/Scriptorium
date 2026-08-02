@@ -88,6 +88,64 @@ def write_srt(cues, dest) -> None:
     write_text(render_srt(cues), dest)
 
 
+_CUE_TIMES = re.compile(
+    r"(\d{1,3}):([0-5]\d):([0-5]\d)[.,](\d{1,3})\s*-->\s*"
+    r"(\d{1,3}):([0-5]\d):([0-5]\d)[.,](\d{1,3})")
+
+
+def _seconds(h, m, s, frac):
+    # A two-digit fraction is centiseconds, a one-digit is tenths.
+    scale = {1: 100, 2: 10, 3: 1}.get(len(frac), 1)
+    return int(h) * 3600 + int(m) * 60 + int(s) + int(frac) * scale / 1000.0
+
+
+def parse(text: str):
+    """Cues from SRT or WebVTT.
+
+    Anchored on the timestamp line, so cue numbers, the WEBVTT header, cue
+    identifiers and NOTE blocks are all ignored without needing to know
+    which format this is.
+    """
+    cues = []
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    i = 0
+    while i < len(lines):
+        m = _CUE_TIMES.search(lines[i])
+        if not m:
+            i += 1
+            continue
+        g = m.groups()
+        start, end = _seconds(*g[:4]), _seconds(*g[4:])
+        i += 1
+        body = []
+        while i < len(lines) and lines[i].strip():
+            body.append(lines[i])
+            i += 1
+        text_ = "\n".join(body).strip()
+        if text_:
+            cues.append((start, end, text_))
+    return cues
+
+
+def without_marker(cues):
+    """Drop our own annotation cue.
+
+    Re-using a transcript we wrote must not feed the marker to the
+    translator, which would translate it and then have it annotated again.
+    """
+    return [c for c in cues if MARKER not in c[2]]
+
+
+def load(path):
+    """Cues from an existing subtitle file, or None if unusable."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    cues = without_marker(parse(text))
+    return cues or None
+
+
 def dest_for(video: Path, lang: str, ext: str = "srt") -> Path:
     stem = video.with_suffix("").name
     return video.parent / f"{stem}.{lang}.{ext}"

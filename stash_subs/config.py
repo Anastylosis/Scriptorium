@@ -142,6 +142,9 @@ class RunCfg:
     # never | if-ours | always. if-ours overwrites only files carrying our
     # marker, leaving hand-made subtitles alone.
     regenerate: str = "never"
+    # Translate from an existing transcript in the spoken language instead
+    # of running Whisper over the audio again.
+    reuse_transcript: bool = True
 
 
 @dataclass(frozen=True)
@@ -235,6 +238,7 @@ def _build(env) -> Config:
             run_once=_bool(env, "RUN_ONCE", False),
             dry_run=_bool(env, "DRY_RUN", False),
             regenerate=_regenerate(env),
+            reuse_transcript=_bool(env, "REUSE_TRANSCRIPT", True),
         ),
         server=ServerCfg(
             host=_get(env, "HTTP_HOST", "0.0.0.0"),

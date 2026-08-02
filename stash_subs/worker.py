@@ -299,10 +299,33 @@ class Worker:
                                                    on_progress=self._progress)
         return cache[src]
 
+    def _source_cues(self, local, src, cache):
+        """Cues to translate from.
+
+        An existing transcript in the source language is read rather than
+        re-derived: the audio has already been through Whisper once and
+        doing it again costs minutes per scene for the same text. A
+        hand-made or downloaded transcript is a better source than a fresh
+        machine one anyway.
+        """
+        if src in cache:
+            return cache[src]
+        # regenerate=always is a request to redo the work, not to recycle it.
+        if self.cfg.run.reuse_transcript and self.cfg.run.regenerate != "always":
+            for fmt in self.cfg.output.formats:
+                path = subtitles.dest_for(local, src, fmt)
+                existing = subtitles.load(path)
+                if existing:
+                    log.info("  translating from %s (%d cues), no new transcription",
+                             path.name, len(existing))
+                    cache[src] = existing
+                    return existing
+        return self._transcribed(local, src, cache)
+
     def _via_llm(self, local, scene, src, lang, cache, duration):
         """(cues or None, salvage needs registering, (action, detail))."""
         cfg = self.cfg
-        cues = self._transcribed(local, src, cache)
+        cues = self._source_cues(local, src, cache)
         # Keep the transcript we just paid for even if the LLM step fails,
         # otherwise minutes of CPU work go in the bin.
         salvage = subtitles.dest_for(local, src)
