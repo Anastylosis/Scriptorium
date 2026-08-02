@@ -1,0 +1,64 @@
+name: CI
+
+# Actions are pinned to exact versions, not moving major tags. A major tag
+# like @v7 advances whenever v7.x ships, so an unrelated commit can turn CI
+# red. Dependabot proposes bumps; they land deliberately.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: pip install ruff==0.14.6
+
+      - run: ruff check .
+
+      - name: Compile check
+        run: python -m compileall -q stash_subs.py
+
+  docker:
+    name: Build image (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      # Build only — pushing happens in release.yml on a tag.
+      - name: Build
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: false
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
