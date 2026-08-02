@@ -1,0 +1,40 @@
+services:
+  stash-subs:
+    image: ghcr.io/wasylq/stash-subs:latest
+    # build: .
+    container_name: stash-subs
+    volumes:
+      # Must resolve to the same container path Stash uses, or set PATH_FROM/PATH_TO.
+      - /path/to/your/videos:/data
+      - stash-subs-models:/models
+    ports:
+      - "8088:8088"
+    environment:
+      - STASH_URL=http://stash:9999
+      # Only needed if authentication is enabled: Settings > Security > API Key
+      - STASH_API_KEY=
+      - MODEL=large-v3-turbo
+      - COMPUTE_TYPE=int8
+      - THREADS=6
+      - POLL_SECONDS=120
+      - REQUEST_TAGS=subs:en,subs:es,subs:auto
+      # Uncomment together with the ollama service below to enable
+      # translation into languages Whisper cannot produce directly.
+      # - OLLAMA_URL=http://ollama:11434
+      # - OLLAMA_MODEL=translategemma:4b
+    restart: unless-stopped
+
+  # Optional. Start with: docker compose --profile translate up -d
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    profiles: ["translate"]
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+volumes:
+  stash-subs-models:
+  ollama:
