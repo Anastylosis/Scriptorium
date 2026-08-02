@@ -1,7 +1,7 @@
 """When the real queue loop asks Stash to rescan."""
 
-from stash_subs import config, status, tags
-from stash_subs.worker import SceneResult, Worker
+from stash_subs import config, outcomes, status, tags
+from stash_subs.worker import Worker
 
 
 class Client:
@@ -52,7 +52,7 @@ def run_once(monkeypatch, scene, result, env=None):
 
 
 def test_a_new_language_asks_for_a_rescan(monkeypatch):
-    c = run_once(monkeypatch, scene_with(), SceneResult(ok=True, needs_scan=True))
+    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)))
     assert c.scans == ["/data"]
 
 
@@ -60,13 +60,13 @@ def test_rewriting_a_known_caption_does_not_rescan(monkeypatch):
     # Stash serves an already-registered caption straight from disk, so a
     # scan would only make it walk the directory for nothing.
     c = run_once(monkeypatch, scene_with(("en", "srt")),
-                 SceneResult(ok=True, needs_scan=False))
+                 outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=False),)))
     assert c.scans == []
     assert c.updates[0][1] == ["d"], "still tagged done"
 
 
 def test_a_failed_scene_is_tagged_failed_and_not_scanned(monkeypatch):
-    c = run_once(monkeypatch, scene_with(), SceneResult(ok=False))
+    c = run_once(monkeypatch, scene_with(), outcomes.failed('boom'))
     assert c.scans == []
     assert c.updates[0][1] == ["f"]
 
@@ -74,13 +74,13 @@ def test_a_failed_scene_is_tagged_failed_and_not_scanned(monkeypatch):
 def test_the_scan_uses_the_stash_side_path(monkeypatch):
     # The worker may see the file at a different path; Stash must be given
     # the path Stash itself reported.
-    c = run_once(monkeypatch, scene_with(), SceneResult(ok=True, needs_scan=True),
+    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)),
                  env={"PATH_FROM": "/data", "PATH_TO": "/mnt/media"})
     assert c.scans == ["/data"]
 
 
 def test_dry_run_touches_nothing(monkeypatch):
-    c = run_once(monkeypatch, scene_with(), SceneResult(ok=True, needs_scan=True),
+    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)),
                  env={"DRY_RUN": "1"})
     assert c.scans == []
     assert c.updates == []

@@ -4,9 +4,8 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import NamedTuple
 
-from . import captions, langs, subtitles, tags
+from . import captions, langs, outcomes, subtitles, tags
 from . import __version__
 from .asr import Models, whisper_translates
 from .audio import probe_duration
@@ -15,13 +14,6 @@ from .stash import Client
 from .translate import Ollama
 
 log = logging.getLogger(__name__)
-
-
-class SceneResult(NamedTuple):
-    ok: bool
-    # True only when a caption Stash did not already know about was written.
-    # Rewriting a registered one is picked up from disk without a scan.
-    needs_scan: bool = False
 
 
 class Control:
@@ -149,7 +141,7 @@ class Worker:
         files = scene.get("files") or []
         if not files:
             log.info("scene %s: no file attached, skipping", scene["id"])
-            return SceneResult(ok=False)
+            return outcomes.failed("no file attached")
 
         local = self.mapper.to_local(files[0]["path"])
         label = scene.get("title") or local.name
@@ -157,11 +149,11 @@ class Worker:
 
         if not local.exists():
             log.error("  ERROR path not visible to this container: %s", local)
-            return SceneResult(ok=False)
+            return outcomes.failed(f"path not visible: {local}")
 
         wanted = self.targets_for(scene)
         if not wanted:
-            return SceneResult(ok=True)
+            return outcomes.Scene()
 
         duration = files[0].get("duration") or probe_duration(local)
         self.store.update(status="working", scene=label, scene_id=scene["id"],
@@ -176,11 +168,11 @@ class Worker:
         self.store.update(source_lang=src, lang_confidence=prob)
 
         cache = {}
-        needs_scan = False
-        for target in wanted:
-            if self.produce(local, scene, src, target, cache, duration):
-                needs_scan = True
-        return SceneResult(ok=True, needs_scan=needs_scan)
+        produced = tuple(self.produce(local, scene, src, t, cache, duration)
+                         for t in wanted)
+        result = outcomes.Scene(targets=produced)
+        log.info("  %s", result.summary())
+        return result
 
     def produce(self, local, scene, src, target, cache, duration):
         cfg = self.cfg
@@ -191,7 +183,8 @@ class Worker:
         if not langs.is_caption_suffix(lang):
             log.warning("  refusing to write .%s.srt: %s", lang,
                         langs.reject_reason(lang))
-            return False
+            return outcomes.Target(lang, outcomes.UNSUPPORTED,
+                                   "not a caption language Stash can attach")
 
         dest = subtitles.dest_for(local, lang)
 
@@ -199,7 +192,7 @@ class Worker:
             why = ("not ours to overwrite" if cfg.run.regenerate == "if-ours"
                    else "exists")
             log.info("  %s %s, skipping", dest.name, why)
-            return False
+            return outcomes.Target(lang, outcomes.SKIPPED, why)
 
         # Stash may already carry this language under another spelling of the
         # same code; writing ours as well would just add a duplicate track.
@@ -207,7 +200,8 @@ class Worker:
             covered = captions.existing_file(local, scene, lang)
             if covered is not None:
                 log.info("  %s already covers %s, skipping", covered.name, lang)
-                return False
+                return outcomes.Target(lang, outcomes.SKIPPED,
+                                       f"covered by {covered.name}")
 
         self.store.update(target=lang, position=0.0)
 
@@ -234,24 +228,26 @@ class Worker:
                                              model=cfg.model.translate_model,
                                              on_progress=self._progress)
         else:
-            cues, salvage_new = self._via_llm(local, scene, src, lang,
-                                              cache, duration)
+            cues, salvage_new, why = self._via_llm(local, scene, src, lang,
+                                                   cache, duration)
             if cues is None:
-                # The translation failed, but a salvaged transcript in a
-                # language Stash has not seen still needs registering.
-                return salvage_new
+                # The translation did not happen, but a salvaged transcript
+                # in a language Stash has not seen still needs registering.
+                return outcomes.Target(lang, why[0], why[1],
+                                       new_caption=salvage_new)
 
         if not cues:
             log.info("  no speech found for %s, nothing written", lang)
-            return False
+            return outcomes.Target(lang, outcomes.NO_SPEECH)
         if cfg.run.dry_run:
             log.info("  [dry run] would write %s (%d cues)", dest.name, len(cues))
-            return False
+            return outcomes.Target(lang, outcomes.DRY_RUN, f"{len(cues)} cues")
         self.write(cues, dest, src, lang, duration,
                    mt_model=cfg.ollama.model if route == "llm" else "")
         # Only a language Stash has not seen before needs a rescan; rewriting
         # a registered caption is served from disk.
-        return not captions.registered(scene, lang)
+        return outcomes.Target(lang, outcomes.WRITTEN, f"{len(cues)} cues",
+                               new_caption=not captions.registered(scene, lang))
 
     def write(self, cues, dest, src, lang, duration, mt_model=""):
         """Add the generation marker and write.
@@ -290,7 +286,7 @@ class Worker:
         return cache[src]
 
     def _via_llm(self, local, scene, src, lang, cache, duration):
-        """(translated cues or None, whether the salvage needs registering)."""
+        """(cues or None, salvage needs registering, (action, detail))."""
         cfg = self.cfg
         cues = self._transcribed(local, src, cache)
         # Keep the transcript we just paid for even if the LLM step fails,
@@ -306,19 +302,22 @@ class Worker:
             log.info("  cannot produce %s: %s cannot translate and no OLLAMA_URL "
                      "is set. Set OLLAMA_URL, or TRANSLATE_MODEL=large-v3 for "
                      "English output.", lang, cfg.model.name)
-            return None, salvage_new
+            return None, salvage_new, (
+                outcomes.UNSUPPORTED,
+                f"{cfg.model.name} cannot translate and OLLAMA_URL is unset")
         self.store.update(stage=f"translating {src} → {lang} (llm)", position=0.0)
 
         def on_progress(done, total):
             self.store.update(position=duration * done / max(1, total))
 
         try:
-            return self.ollama.translate(cues, src, lang,
-                                         on_progress=on_progress), salvage_new
+            translated = self.ollama.translate(cues, src, lang,
+                                               on_progress=on_progress)
+            return translated, salvage_new, ("", "")
         except Exception as e:
             log.info("  translation to %s failed: %s", lang, e)
             log.info("  source transcript kept as %s", salvage.name)
-            return None, salvage_new
+            return None, salvage_new, (outcomes.ERROR, f"translation failed: {e}")
 
     def swap_tags(self, scene, ok):
         """Replace the request tags with done/failed.
@@ -367,7 +366,7 @@ class Worker:
                 if self.control.stopping or self.control.paused:
                     break
                 self.store.update(queue=len(scenes) - i - 1)
-                result = SceneResult(ok=False)
+                result = outcomes.failed("unhandled error")
                 try:
                     result = self.process_scene(scene)
                 except Exception as e:

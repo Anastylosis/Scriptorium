@@ -41,6 +41,21 @@ to map between the two.
    (or `subs:failed`), and the containing folder is rescanned so the caption
    shows up in the player.
 
+A scene is only marked `subs:done` if every language it asked for was either
+produced or already present. If one could not be made — a target needing an
+LLM with no `OLLAMA_URL` set, for instance — the scene is marked `subs:failed`
+even though the others succeeded, so the request stays visible instead of
+disappearing into a `done` pile. The log names each language and what happened
+to it:
+
+```
+es: unsupported (tiny cannot translate and OLLAMA_URL is unset)
+en: written (412 cues)
+```
+
+A scene with no speech in it counts as done, not failed — there was nothing
+to produce.
+
 Only `subs:en`, `subs:done` and `subs:failed` are created for you. To request
 another language, make the tag yourself — `subs:fr`, `subs:ja`, `subs:pl` —
 and it is picked up on the next poll. No restart, no configuration.
