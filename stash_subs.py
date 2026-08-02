@@ -338,19 +338,26 @@ def transcribe(path, language, task="transcribe", model=None):
 # --------------------------------------------------------------------------
 
 def ts(seconds):
-    ms = int(round(seconds * 1000))
+    ms = max(0, int(round(seconds * 1000)))
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
     s, ms = divmod(ms, 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
+def cue_text(text):
+    """A blank line ends a cue in SRT, so one inside the text splits it in two
+    and every following cue number is wrong."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
 def write_srt(cues, dest):
     """Write atomically — a half-written SRT scanned by Stash is a bad time."""
     tmp = Path(str(dest) + ".part")
-    with open(tmp, "w", encoding="utf-8") as f:
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
         for i, (start, end, text) in enumerate(cues, 1):
-            f.write(f"{i}\n{ts(start)} --> {ts(end)}\n{text}\n\n")
+            f.write(f"{i}\n{ts(start)} --> {ts(end)}\n{cue_text(text)}\n\n")
     os.replace(tmp, dest)
 
 

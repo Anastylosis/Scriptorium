@@ -1,0 +1,70 @@
+name: Docker (dev images)
+
+# Tagged releases are handled by release.yml. This publishes development
+# images only: tip-of-default-branch and per-commit `sha-<short>`, so a
+# change can be pulled onto a real Stash box before a version is cut.
+# Pull requests build without pushing.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'requirements.txt'
+      - 'stash_subs.py'
+      - '.github/workflows/docker-dev.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docker-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build and push dev image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image metadata
+        id: meta
+        uses: docker/metadata-action@v6.2.0
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # No `latest` here — that tag belongs to the newest release.
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+            type=ref,event=pr
+
+      - name: Build and push
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
