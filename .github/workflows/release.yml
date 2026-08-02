@@ -31,6 +31,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Lowercase image repo
+        # OCI references must be all-lowercase and ${{ github.repository }}
+        # can contain uppercase; GitHub expressions have no case conversion.
+        # docker/metadata-action lowercases the pushed tags itself, but Trivy
+        # and the release notes need the same treatment or they emit refs
+        # that do not resolve.
+        run: echo "IMAGE_REPO_LC=ghcr.io/${REPO,,}" >> "$GITHUB_ENV"
+        env:
+          REPO: ${{ github.repository }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4.2.0
 
@@ -80,13 +90,6 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: false
 
-      - name: Lowercase image repo for Trivy
-        # OCI references must be all-lowercase and ${{ github.repository }}
-        # can contain uppercase; GitHub expressions have no case conversion.
-        run: echo "IMAGE_REPO_LC=ghcr.io/${REPO,,}" >> "$GITHUB_ENV"
-        env:
-          REPO: ${{ github.repository }}
-
       - name: Trivy scan (informational)
         # exit-code 0: a fail-on-any-finding gate would force base-image
         # bumps on every new CVE. Findings show up in the log; bump deliberately.
@@ -123,15 +126,15 @@ jobs:
             ## Image
 
             ```sh
-            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            docker pull ${{ env.IMAGE_REPO_LC }}:${{ github.ref_name }}
             ```
 
-            Digest: `${{ steps.build.outputs.digest }}`
+            `linux/amd64` and `linux/arm64`. Digest: `${{ steps.build.outputs.digest }}`
 
             Verify the build provenance:
 
             ```sh
             gh attestation verify \
-              oci://ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }} \
+              oci://${{ env.IMAGE_REPO_LC }}@${{ steps.build.outputs.digest }} \
               --owner ${{ github.repository_owner }}
             ```
