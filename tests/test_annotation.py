@@ -4,6 +4,7 @@ from stash_subs import config
 from stash_subs.subtitles import (
     DEFAULT_TEMPLATE,
     MARKER,
+    MAX_OVERSHOOT,
     Provenance,
     TemplateError,
     annotation_cue,
@@ -59,20 +60,31 @@ def test_end_starts_after_the_last_real_cue():
     assert cue[0] >= CUES[-1][1]
 
 
-def test_end_is_clamped_to_the_media_duration():
-    # A subtitle that outlives its video reads as a mismatch to anything
-    # pairing subtitles with scenes by runtime, so the marker must never
-    # push the last timestamp past the end of the media.
-    cue = annotation_cue(CUES, PROV, mode="end", seconds=30.0, gap=5.0,
+def test_a_long_marker_is_reined_in():
+    # Runtime-based subtitle matching tolerates roughly twenty seconds before
+    # it decides a subtitle belongs to a different video.
+    cue = annotation_cue(CUES, PROV, mode="end", seconds=300.0, gap=5.0,
                          media_duration=13.0)
-    assert cue[1] <= 13.0
+    assert cue[1] <= 13.0 + MAX_OVERSHOOT
 
 
-def test_end_never_overshoots_even_on_a_tight_fit():
-    for duration in (12.1, 12.5, 13.0, 15.0, 60.0):
+def test_the_marker_never_covers_dialogue_or_runs_out_of_order():
+    # Speech running to the very end of a short clip used to push the marker
+    # backwards on top of the dialogue, producing cues out of chronological
+    # order. Overshooting the media slightly is the lesser evil and is well
+    # inside what runtime matching tolerates.
+    for duration in (11.0, 12.0, 12.1, 13.0, 15.0, 60.0):
         cue = annotation_cue(CUES, PROV, mode="end", media_duration=duration)
-        assert cue[1] <= duration, duration
+        assert cue[0] >= CUES[-1][1], f"overlaps dialogue at {duration}"
         assert cue[1] > cue[0], duration
+        assert cue[1] <= duration + MAX_OVERSHOOT, duration
+
+
+def test_speech_to_the_last_frame_still_gets_a_clean_marker():
+    cues = [(0.02, 11.0, "talking right up to the end")]
+    out = with_annotation(cues, PROV, media_duration=11.0)
+    assert len(out) == 2
+    assert out[1][0] >= out[0][1], "the marker must start after the dialogue"
 
 
 def test_end_without_a_known_duration_still_produces_a_sane_cue():

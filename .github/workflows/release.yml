@@ -126,8 +126,11 @@ jobs:
             ## Image
 
             ```sh
-            docker pull ${{ env.IMAGE_REPO_LC }}:${{ github.ref_name }}
+            docker pull ${{ env.IMAGE_REPO_LC }}:${{ steps.meta.outputs.version }}
             ```
+
+            Or `:latest`. Note the published tag has no `v` prefix —
+            docker/metadata-action strips it from the git tag.
 
             `linux/amd64` and `linux/arm64`. Digest: `${{ steps.build.outputs.digest }}`
 

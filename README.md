@@ -82,11 +82,12 @@ Every file the worker writes ends with a short cue naming what produced it:
 
 A transcript that was not translated names one language rather than two.
 
-It sits **after** the last line of dialogue by default, in the credits or the
-silence at the end, so it never covers the opening shot. Its timing is clamped
-to the length of the video: a subtitle whose last cue runs past the end of the
-media looks like a mismatch to anything that pairs subtitles with scenes by
-runtime, so the marker will overlap the final line before it will overshoot.
+It sits **after** the last line of dialogue by default, so it never covers the
+opening shot and never overlaps speech. On a scene where dialogue runs to the
+final frame the marker extends a few seconds past the end of the video, which
+is deliberate: tools that pair subtitles to scenes by runtime allow about
+twenty seconds of slack, and a marker crammed backwards over the closing line
+would be worse. A marker long enough to distort that signal is reined in.
 
 Set `ANNOTATE=start` to put it first instead — useful if you want to know what
 made a file before watching it. It is skipped automatically when dialogue

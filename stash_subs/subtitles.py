@@ -23,6 +23,12 @@ DEFAULT_TEMPLATE = (
 # How much of each end of a file to search when identifying our own output.
 _SNIFF_BYTES = 4096
 
+# How far past the end of the media the marker may run. Subtitle-to-scene
+# matching by runtime tolerates about twenty seconds before it treats a
+# subtitle as belonging to something else; half of that is ample for a
+# three-second marker and leaves the signal intact.
+MAX_OVERSHOOT = 10.0
+
 
 def ts(seconds: float) -> str:
     ms = max(0, int(round(seconds * 1000)))
@@ -127,16 +133,17 @@ def annotation_cue(cues, prov, mode="end", seconds=3.0, gap=1.0,
         return (0.0, min(seconds, first - 0.25), text)
 
     last = cues[-1][1]
-    end = last + gap + seconds
+    start = last + gap
+    end = start + seconds
     if media_duration > 0:
-        # A subtitle that outlives its video reads as a mismatch to anything
-        # pairing subtitles with scenes by runtime, so never overshoot. This
-        # bound holds even when it means overlapping the last line of
-        # dialogue: an overlap is cosmetic, an overshoot is not.
-        end = min(end, media_duration - 0.05)
-    start = max(last + gap, end - seconds)
-    if start >= end:
-        start = max(0.0, end - seconds)
+        # Tools that pair subtitles to scenes by runtime allow a margin
+        # before a longer subtitle counts against the match, so running a
+        # few seconds past the end of the media is harmless. Only a marker
+        # long enough to look like a different video needs reining in.
+        limit = media_duration + MAX_OVERSHOOT
+        if end > limit:
+            end = limit
+            start = min(start, end - 0.5)
     if end - start < 0.2:
         return None          # nothing usable fits
     return (start, end, text)
