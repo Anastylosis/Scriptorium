@@ -117,6 +117,25 @@ for anything produced while `ANNOTATE=none`.
 
 `OVERWRITE=1` still works and means `always`.
 
+## Work Stash already has
+
+The worker asks Stash which captions a scene already carries, so it does not
+redo work or make Stash redo work.
+
+A language you already have is skipped even when it is spelled differently: if
+a hand-placed `clip.eng.srt` is attached to the scene, tagging it `subs:en`
+produces nothing rather than a near-duplicate `clip.en.srt`. A caption Stash
+lists but whose file you have since deleted does *not* count — that gets
+regenerated.
+
+Stash is only asked to rescan when a genuinely new language lands. Replacing a
+caption it already knows about is picked up from disk on its own, so no scan is
+triggered for it.
+
+On a Stash too old to report captions the worker notices at startup, says so
+once, and falls back to checking the filesystem — everything still works, it
+just cannot spot equivalent spellings.
+
 ## Status page
 
 `http://<host>:8088`

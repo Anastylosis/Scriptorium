@@ -8,6 +8,7 @@ import urllib.request
 log = logging.getLogger(__name__)
 
 SCENE_FIELDS = "id title files { path duration } tags { id name }"
+CAPTION_FIELDS = "captions { language_code caption_type }"
 
 
 class StashError(RuntimeError):
@@ -19,6 +20,9 @@ class Client:
         self.url = url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        # Assumed absent until probed: asking for a field this Stash does not
+        # have fails the whole query, not just that field.
+        self.supports_captions = False
 
     def execute(self, query, variables=None):
         payload = json.dumps({"query": query, "variables": variables or {}}).encode()
@@ -68,15 +72,36 @@ class Client:
             "query { findTags(filter: {per_page: -1}) { tags { id name } } }")
         return data["findTags"]["tags"]
 
+    def probe_captions(self):
+        """Find out whether this Stash exposes Scene.captions.
+
+        Stash's schema shifts between releases and an unknown field makes the
+        entire scene query fail, so this is asked once, cheaply, rather than
+        discovered when the queue is first read.
+        """
+        try:
+            self.execute(
+                "query { findScenes(filter: {per_page: 1}) { scenes { %s } } }"
+                % CAPTION_FIELDS)
+            self.supports_captions = True
+        except StashError as e:
+            self.supports_captions = False
+            log.info("this Stash does not expose Scene.captions (%s); falling "
+                     "back to checking the filesystem only", str(e)[:120])
+        return self.supports_captions
+
     def find_tagged_scenes(self, tag_ids):
         # depth 0 deliberately does not descend the tag hierarchy.
+        fields = SCENE_FIELDS
+        if self.supports_captions:
+            fields += " " + CAPTION_FIELDS
         data = self.execute(
             """query($ids: [ID!]) {
                  findScenes(
                    scene_filter: {tags: {value: $ids, modifier: INCLUDES, depth: 0}},
                    filter: {per_page: -1, sort: "id", direction: ASC}
                  ) { count scenes { %s } }
-               }""" % SCENE_FIELDS,
+               }""" % fields,
             {"ids": list(tag_ids)},
         )
         return data["findScenes"]["scenes"]
