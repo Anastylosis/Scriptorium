@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-import stash_subs as s
+from stash_subs import asr as s
 
 
 def seg(start, end, text, no_speech_prob=0.0, compression_ratio=1.0):
@@ -83,28 +83,26 @@ def test_timings_are_preserved():
     assert out == [(1.25, 3.5, "x")]
 
 
-def test_progress_is_reported_for_dropped_segments_too(monkeypatch):
+def test_progress_is_reported_for_dropped_segments_too():
     # The progress bar must not stall through a long run of filtered junk.
     seen = []
-    monkeypatch.setattr(s, "set_state", lambda **kw: seen.append(kw.get("position")))
     s.clean([seg(0, 1, "Thanks for watching"), seg(1, 2, "real line")],
-            report_progress=True)
+            on_progress=seen.append)
     assert seen == [1, 2]
 
 
-def test_accepts_a_generator_and_reports_progress_as_it_goes(monkeypatch):
+def test_accepts_a_generator_and_reports_progress_as_it_goes():
     # faster-whisper yields segments lazily and clean() is what turns that
     # into the progress bar, so it must take an iterator, not a sequence,
     # and emit progress interleaved with consumption rather than at the end.
     events = []
-    monkeypatch.setattr(s, "set_state", lambda **kw: events.append(("progress", kw.get("position"))))
 
     def stream():
         for i in range(3):
             events.append(("yield", i))
             yield seg(i, i + 1, f"line {i}")
 
-    result = s.clean(stream(), report_progress=True)
+    result = s.clean(stream(), on_progress=lambda p: events.append(("progress", p)))
     assert len(result) == 3
     assert events == [
         ("yield", 0), ("progress", 1),

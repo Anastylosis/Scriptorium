@@ -1,4 +1,4 @@
-import stash_subs as s
+from stash_subs import subtitles as s
 
 
 def test_ts_golden():

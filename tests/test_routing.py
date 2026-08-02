@@ -1,6 +1,14 @@
 import pytest
 
-import stash_subs as s
+from stash_subs import config, status
+from stash_subs.asr import whisper_translates
+from stash_subs.translate import resolve_mode
+from stash_subs.worker import Worker
+
+
+def worker(env=None):
+    cfg = config.from_env(env or {})
+    return Worker(cfg, status.Store(), client=object())
 
 
 @pytest.mark.parametrize("model,translates", [
@@ -16,29 +24,35 @@ def test_turbo_checkpoints_are_known_not_to_translate(model, translates):
     # Turbo was fine-tuned with translation data excluded and returns
     # source-language text for task="translate" without erroring, so this
     # guard is what stops Spanish audio landing in a file named .en.srt.
-    assert s.whisper_translates(model) is translates
+    assert whisper_translates(model) is translates
 
 
 def test_targets_for_extracts_language_from_request_tags():
     scene = {"tags": [{"id": "1", "name": "subs:en"},
                       {"id": "2", "name": "subs:es"},
                       {"id": "9", "name": "favourite"}]}
-    assert sorted(s.targets_for(scene)) == ["en", "es"]
+    assert sorted(worker().targets_for(scene)) == ["en", "es"]
 
 
 def test_targets_for_is_case_insensitive():
     scene = {"tags": [{"id": "1", "name": "SUBS:EN"}]}
-    assert s.targets_for(scene) == ["en"]
+    assert worker().targets_for(scene) == ["en"]
 
 
 def test_targets_for_ignores_unrelated_tags():
     scene = {"tags": [{"id": "1", "name": "subs:done"},
                       {"id": "2", "name": "4k"}]}
-    assert s.targets_for(scene) == []
+    assert worker().targets_for(scene) == []
 
 
 def test_targets_for_handles_a_scene_with_no_tags():
-    assert s.targets_for({"tags": []}) == []
+    assert worker().targets_for({"tags": []}) == []
+
+
+def test_targets_for_honours_a_custom_request_tag_list():
+    w = worker({"REQUEST_TAGS": "subs:fr"})
+    scene = {"tags": [{"id": "1", "name": "subs:fr"}, {"id": "2", "name": "subs:en"}]}
+    assert w.targets_for(scene) == ["fr"]
 
 
 @pytest.mark.parametrize("model,mode", [
@@ -50,17 +64,16 @@ def test_targets_for_handles_a_scene_with_no_tags():
     ("qwen3:8b", "json"),
     ("llama3", "json"),
 ])
-def test_translate_mode_autodetects_from_model_name(monkeypatch, model, mode):
+def test_translate_mode_autodetects_from_model_name(model, mode):
     # Dedicated translation models will not emit structured JSON.
-    monkeypatch.setattr(s, "TRANSLATE_MODE", "auto")
-    monkeypatch.setattr(s, "OLLAMA_MODEL", model)
-    assert s._translate_mode() == mode
+    cfg = config.from_env({"OLLAMA_MODEL": model}).ollama
+    assert resolve_mode(cfg) == mode
 
 
-def test_translate_mode_respects_an_explicit_override(monkeypatch):
-    monkeypatch.setattr(s, "TRANSLATE_MODE", "json")
-    monkeypatch.setattr(s, "OLLAMA_MODEL", "translategemma:4b")
-    assert s._translate_mode() == "json"
+def test_translate_mode_respects_an_explicit_override():
+    cfg = config.from_env({"OLLAMA_MODEL": "translategemma:4b",
+                           "TRANSLATE_MODE": "json"}).ollama
+    assert resolve_mode(cfg) == "json"
 
 
 @pytest.mark.parametrize("seconds,expected", [
@@ -72,4 +85,4 @@ def test_translate_mode_respects_an_explicit_override(monkeypatch):
     (3661, "1:01:01"),
 ])
 def test_fmt_hms(seconds, expected):
-    assert s.fmt_hms(seconds) == expected
+    assert status.fmt_hms(seconds) == expected

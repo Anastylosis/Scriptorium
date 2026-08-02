@@ -26,7 +26,7 @@ ENV PYTHONUNBUFFERED=1 \
     HTTP_PORT=8088
 
 WORKDIR /app
-COPY stash_subs.py /app/stash_subs.py
+COPY stash_subs/ /app/stash_subs/
 
 VOLUME ["/models"]
 EXPOSE 8088
@@ -34,4 +34,4 @@ EXPOSE 8088
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('HTTP_PORT','8088')+'/json',timeout=5)"]
 
-ENTRYPOINT ["python", "/app/stash_subs.py"]
+ENTRYPOINT ["python", "-m", "stash_subs"]
