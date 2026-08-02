@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from . import langs, subtitles, tags
+from . import __version__
 from .asr import Models, whisper_translates
 from .audio import probe_duration
 from .paths import PathMapper
@@ -185,8 +186,10 @@ class Worker:
 
         dest = subtitles.dest_for(local, lang)
 
-        if dest.exists() and not cfg.run.overwrite:
-            log.info("  %s exists, skipping", dest.name)
+        if not subtitles.should_write(dest, cfg.run.regenerate):
+            why = ("not ours to overwrite" if cfg.run.regenerate == "if-ours"
+                   else "exists")
+            log.info("  %s %s, skipping", dest.name, why)
             return False
 
         self.store.update(target=lang, position=0.0)
@@ -224,10 +227,38 @@ class Worker:
         if cfg.run.dry_run:
             log.info("  [dry run] would write %s (%d cues)", dest.name, len(cues))
             return False
-        subtitles.write_srt(cues, dest)
+        self.write(cues, dest, src, lang, duration,
+                   mt_model=cfg.ollama.model if route == "llm" else "")
+        return True
+
+    def write(self, cues, dest, src, lang, duration, mt_model=""):
+        """Add the generation marker and write.
+
+        The marker is applied here rather than upstream so it can never be
+        handed to the translator: translate() only ever sees transcribed cues.
+        """
+        cfg = self.cfg
+        annotated = subtitles.with_annotation(
+            cues, self.provenance(src, lang, mt_model),
+            mode=cfg.annotate.mode,
+            seconds=cfg.annotate.seconds,
+            gap=cfg.annotate.gap,
+            media_duration=duration,
+            template=cfg.annotate.text or subtitles.DEFAULT_TEMPLATE,
+        )
+        subtitles.write_srt(annotated, dest)
         log.info("  wrote %s (%d cues)", dest.name, len(cues))
         self.store.add_completed(f"{dest.name} — {len(cues)} cues")
-        return True
+
+    def provenance(self, src, dst, mt_model=""):
+        return subtitles.Provenance(
+            version=__version__,
+            asr_model=self.cfg.model.name,
+            mt_model=mt_model,
+            src=src, src_name=langs.name_of(src),
+            dst=dst, dst_name=langs.name_of(dst),
+            date=time.strftime("%Y-%m-%d"),
+        )
 
     def _transcribed(self, local, src, cache):
         if src not in cache:
@@ -242,9 +273,9 @@ class Worker:
         # Keep the transcript we just paid for even if the LLM step fails,
         # otherwise minutes of CPU work go in the bin.
         salvage = subtitles.dest_for(local, src)
-        if cues and not salvage.exists() and not cfg.run.dry_run:
-            subtitles.write_srt(cues, salvage)
-            log.info("  wrote %s (%d cues, source language)", salvage.name, len(cues))
+        if (cues and not cfg.run.dry_run
+                and subtitles.should_write(salvage, cfg.run.regenerate)):
+            self.write(cues, salvage, src, src, duration)
         if not cfg.ollama.url:
             log.info("  cannot produce %s: %s cannot translate and no OLLAMA_URL "
                      "is set. Set OLLAMA_URL, or TRANSLATE_MODEL=large-v3 for "

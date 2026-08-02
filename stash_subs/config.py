@@ -37,11 +37,36 @@ def _bool(env, name, default):
     return raw.lower() in ("1", "true", "yes", "on")
 
 
+def _float(env, name, default):
+    raw = _get(env, name, None)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a number, got {raw!r}") from None
+
+
 def _list(env, name, default):
     raw = _get(env, name, None)
     if raw is None:
         return list(default)
     return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+REGENERATE_MODES = ("never", "if-ours", "always")
+
+
+def _regenerate(env):
+    raw = _get(env, "REGENERATE", None)
+    if raw is None:
+        # OVERWRITE predates REGENERATE and meant "always".
+        return "always" if _bool(env, "OVERWRITE", False) else "never"
+    raw = raw.lower()
+    if raw not in REGENERATE_MODES:
+        raise ConfigError(
+            f"REGENERATE must be one of {', '.join(REGENERATE_MODES)}, got {raw!r}")
+    return raw
 
 
 @dataclass(frozen=True)
@@ -91,11 +116,21 @@ class OllamaCfg:
 
 
 @dataclass(frozen=True)
+class AnnotateCfg:
+    mode: str = "end"          # none | start | end
+    text: str = ""             # empty means the built-in template
+    seconds: float = 3.0
+    gap: float = 1.0
+
+
+@dataclass(frozen=True)
 class RunCfg:
     poll_seconds: int = 120
     run_once: bool = False
     dry_run: bool = False
-    overwrite: bool = False
+    # never | if-ours | always. if-ours overwrites only files carrying our
+    # marker, leaving hand-made subtitles alone.
+    regenerate: str = "never"
 
 
 @dataclass(frozen=True)
@@ -110,12 +145,31 @@ class Config:
     model: ModelCfg = field(default_factory=ModelCfg)
     tags: TagsCfg = field(default_factory=TagsCfg)
     ollama: OllamaCfg = field(default_factory=OllamaCfg)
+    annotate: AnnotateCfg = field(default_factory=AnnotateCfg)
     run: RunCfg = field(default_factory=RunCfg)
     server: ServerCfg = field(default_factory=ServerCfg)
 
 
+ANNOTATE_MODES = ("none", "start", "end")
+
+
 def from_env(env: Mapping[str, str] | None = None) -> Config:
     env = os.environ if env is None else env
+    cfg = _build(env)
+    if cfg.annotate.mode not in ANNOTATE_MODES:
+        raise ConfigError(
+            f"ANNOTATE must be one of {', '.join(ANNOTATE_MODES)}, "
+            f"got {cfg.annotate.mode!r}")
+    if cfg.annotate.text:
+        from .subtitles import TemplateError, validate_template
+        try:
+            validate_template(cfg.annotate.text)
+        except TemplateError as e:
+            raise ConfigError(f"ANNOTATE_TEXT: {e}") from None
+    return cfg
+
+
+def _build(env) -> Config:
     return Config(
         stash=StashCfg(
             url=_get(env, "STASH_URL", "http://stash:9999").rstrip("/"),
@@ -148,11 +202,17 @@ def from_env(env: Mapping[str, str] | None = None) -> Config:
             pull=_bool(env, "OLLAMA_PULL", True),
             mode=_get(env, "TRANSLATE_MODE", "auto"),
         ),
+        annotate=AnnotateCfg(
+            mode=_get(env, "ANNOTATE", "end").lower(),
+            text=_get(env, "ANNOTATE_TEXT", ""),
+            seconds=_float(env, "ANNOTATE_SECONDS", 3.0),
+            gap=_float(env, "ANNOTATE_GAP", 1.0),
+        ),
         run=RunCfg(
             poll_seconds=_int(env, "POLL_SECONDS", 120),
             run_once=_bool(env, "RUN_ONCE", False),
             dry_run=_bool(env, "DRY_RUN", False),
-            overwrite=_bool(env, "OVERWRITE", False),
+            regenerate=_regenerate(env),
         ),
         server=ServerCfg(
             host=_get(env, "HTTP_HOST", "0.0.0.0"),

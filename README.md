@@ -72,6 +72,50 @@ rather than on every poll.
 Whisper can transcribe 100 languages. Anything outside that set can still be
 reached by translating from the spoken language, which needs `OLLAMA_URL`.
 
+## Generated subtitles say so
+
+Every file the worker writes ends with a short cue naming what produced it:
+
+```
+[stash-subs] machine-generated subtitles · large-v3-turbo + translategemma:4b · Spanish → English · 2026-08-02
+```
+
+A transcript that was not translated names one language rather than two.
+
+It sits **after** the last line of dialogue by default, in the credits or the
+silence at the end, so it never covers the opening shot. Its timing is clamped
+to the length of the video: a subtitle whose last cue runs past the end of the
+media looks like a mismatch to anything that pairs subtitles with scenes by
+runtime, so the marker will overlap the final line before it will overshoot.
+
+Set `ANNOTATE=start` to put it first instead — useful if you want to know what
+made a file before watching it. It is skipped automatically when dialogue
+begins too early to fit. `ANNOTATE=none` turns it off, and produces output
+byte-identical to having never enabled it.
+
+`ANNOTATE_TEXT` takes a template. Available placeholders: `{marker}`, `{tool}`,
+`{version}`, `{asr_model}`, `{mt_model}`, `{mt_suffix}`, `{src}`, `{src_name}`,
+`{dst}`, `{dst_name}`, `{languages}`, `{date}`. It must contain `{marker}`, and
+is checked when the container starts rather than part-way through a
+transcription.
+
+### Regenerating
+
+The `[stash-subs]` marker is how a later run recognises its own work:
+
+| `REGENERATE` | Behaviour |
+|---|---|
+| `never` (default) | Leave any existing subtitle alone |
+| `if-ours` | Replace files carrying the marker; never touch hand-made or downloaded ones |
+| `always` | Replace everything |
+
+`if-ours` is the one worth knowing about — it lets you re-run the whole library
+with a better model without destroying subtitles you wrote or sourced yourself.
+It only recognises files written with an annotation, so it does nothing useful
+for anything produced while `ANNOTATE=none`.
+
+`OVERWRITE=1` still works and means `always`.
+
 ## Status page
 
 `http://<host>:8088`
@@ -205,7 +249,11 @@ artefacts specific to your files.
 |---|---|---|
 | `DRY_RUN` | `0` | Log what would be written, change nothing, leave tags alone |
 | `RUN_ONCE` | `0` | Drain the queue and exit, for cron-style use |
-| `OVERWRITE` | `0` | Regenerate even if the `.srt` already exists |
+| `REGENERATE` | `never` | `never`, `if-ours`, `always` — see above |
+| `ANNOTATE` | `end` | `none`, `start`, `end` |
+| `ANNOTATE_TEXT` | built-in | Template for the marker cue |
+| `ANNOTATE_SECONDS` | `3.0` | How long the marker shows |
+| `ANNOTATE_GAP` | `1.0` | Pause after the last real cue |
 | `POLL_SECONDS` | `120` | Queue poll interval |
 | `HTTP_PORT` | `8088` | Status page port |
 | `OLLAMA_PULL` | `1` | Auto-pull the model at startup |

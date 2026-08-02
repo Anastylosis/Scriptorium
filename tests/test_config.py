@@ -49,7 +49,6 @@ def test_every_int_env_var_is_wired(name, path, value):
 @pytest.mark.parametrize("name,path", [
     ("RUN_ONCE", ("run", "run_once")),
     ("DRY_RUN", ("run", "dry_run")),
-    ("OVERWRITE", ("run", "overwrite")),
     ("OLLAMA_PULL", ("ollama", "pull")),
 ])
 def test_every_bool_env_var_is_wired(name, path):
