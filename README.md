@@ -175,6 +175,8 @@ speed as a multiple of realtime, an ETA, the detected source language and its
 confidence, how many scenes are still queued, recently written files, and the
 last 200 log lines.
 
+The running version is in the page footer, and in `/json` as `version`.
+
 `http://<host>:8088/json` returns the same state as JSON if you'd rather
 poll it from somewhere else.
 

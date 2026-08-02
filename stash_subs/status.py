@@ -7,6 +7,8 @@ import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import __version__
+
 
 class Store:
     """Worker state, readable from the HTTP thread.
@@ -35,6 +37,7 @@ class Store:
             "next_poll": None,
             "request_tags": [],
             "poll_note": None,
+            "version": __version__,
         }
 
     def update(self, **kw):
@@ -98,7 +101,8 @@ PAGE = """<!doctype html>
 <h1>stash-subs</h1>
 {body}
 <div class="card"><h2>Log</h2><pre>{logs}</pre></div>
-<p class="meta">Auto-refreshes every 5s &middot; uptime {uptime}</p>
+<p class="meta"><a href="https://github.com/Wasylq/stash-subs">stash-subs</a>
+{version} &middot; auto-refreshes every 5s &middot; uptime {uptime}</p>
 </div></body></html>"""
 
 
@@ -176,6 +180,7 @@ def render(store, ring, paused=False):
         body="".join(parts),
         logs=html.escape(logs) or "(nothing yet)",
         uptime=fmt_hms(time.time() - st["started"]),
+        version=html.escape(__version__),
     )
 
 

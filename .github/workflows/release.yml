@@ -31,6 +31,21 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check the tag matches the declared version
+        # The version is baked into every generated subtitle's provenance and
+        # shown on the status page, so a stale one mislabels output. It has
+        # silently drifted twice; a test that only compares pyproject.toml
+        # with __init__.py cannot catch it, because both go stale together.
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          declared=$(python3 -c "import tomllib,pathlib; \
+            print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "tag=${tag} declared=${declared}"
+          if [ "$tag" != "$declared" ]; then
+            echo "::error::tag v${tag} does not match version ${declared} in pyproject.toml"
+            exit 1
+          fi
+
       - name: Lowercase image repo
         # OCI references must be all-lowercase and ${{ github.repository }}
         # can contain uppercase; GitHub expressions have no case conversion.
