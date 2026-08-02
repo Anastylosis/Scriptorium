@@ -38,5 +38,22 @@ jobs:
 
       - run: python -m pytest tests/ -q
 
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+
+      - run: pip install pip-audit==2.9.0
+
+      # Informational. A gate here would turn CI red on someone else's
+      # advisory and force dependency bumps on their schedule rather than
+      # on a deliberate decision.
+      - run: pip-audit -r requirements.txt || echo "::warning::pip-audit reported findings"
+
 # Image builds live in docker-dev.yml (branch and sha tags) and release.yml
 # (version tags), so they are not duplicated here.

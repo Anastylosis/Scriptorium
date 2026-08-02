@@ -186,13 +186,16 @@ class Worker:
             return outcomes.Target(lang, outcomes.UNSUPPORTED,
                                    "not a caption language Stash can attach")
 
-        dest = subtitles.dest_for(local, lang)
-
-        if not subtitles.should_write(dest, cfg.run.regenerate):
+        formats = cfg.output.formats
+        pending = [f for f in formats
+                   if subtitles.should_write(subtitles.dest_for(local, lang, f),
+                                             cfg.run.regenerate)]
+        if not pending:
             why = ("not ours to overwrite" if cfg.run.regenerate == "if-ours"
                    else "exists")
-            log.info("  %s %s, skipping", dest.name, why)
+            log.info("  %s.%s %s, skipping", lang, "/".join(formats), why)
             return outcomes.Target(lang, outcomes.SKIPPED, why)
+        dest = subtitles.dest_for(local, lang, pending[0])
 
         # Stash may already carry this language under another spelling of the
         # same code; writing ours as well would just add a duplicate track.
@@ -242,31 +245,42 @@ class Worker:
         if cfg.run.dry_run:
             log.info("  [dry run] would write %s (%d cues)", dest.name, len(cues))
             return outcomes.Target(lang, outcomes.DRY_RUN, f"{len(cues)} cues")
-        self.write(cues, dest, src, lang, duration,
+        self.write(cues, local, src, lang, duration,
                    mt_model=cfg.ollama.model if route == "llm" else "")
         # Only a language Stash has not seen before needs a rescan; rewriting
         # a registered caption is served from disk.
+        new = any(not captions.registered(scene, lang, ext=f)
+                  for f in cfg.output.formats)
         return outcomes.Target(lang, outcomes.WRITTEN, f"{len(cues)} cues",
-                               new_caption=not captions.registered(scene, lang))
+                               new_caption=new)
 
-    def write(self, cues, dest, src, lang, duration, mt_model=""):
-        """Add the generation marker and write.
+    def write(self, cues, local, src, lang, duration, mt_model=""):
+        """Add the generation marker and write every requested format.
 
         The marker is applied here rather than upstream so it can never be
         handed to the translator: translate() only ever sees transcribed cues.
         """
         cfg = self.cfg
+        prov = self.provenance(src, lang, mt_model)
         annotated = subtitles.with_annotation(
-            cues, self.provenance(src, lang, mt_model),
+            cues, prov,
             mode=cfg.annotate.mode,
             seconds=cfg.annotate.seconds,
             gap=cfg.annotate.gap,
             media_duration=duration,
             template=cfg.annotate.text or subtitles.DEFAULT_TEMPLATE,
         )
-        subtitles.write_srt(annotated, dest)
-        log.info("  wrote %s (%d cues)", dest.name, len(cues))
-        self.store.add_completed(f"{dest.name} — {len(cues)} cues")
+        note = prov.as_json(cues=len(cues))
+        for fmt in cfg.output.formats:
+            dest = subtitles.dest_for(local, lang, fmt)
+            subtitles.write_text(
+                subtitles.render(annotated, fmt=fmt, note=note), dest)
+            log.info("  wrote %s (%d cues)", dest.name, len(cues))
+            self.store.add_completed(f"{dest.name} — {len(cues)} cues")
+            if cfg.annotate.sidecar:
+                subtitles.write_text(prov.as_json(cues=len(cues),
+                                                  media=str(local)),
+                                     subtitles.sidecar_for(dest))
 
     def provenance(self, src, dst, mt_model=""):
         return subtitles.Provenance(
@@ -296,8 +310,9 @@ class Worker:
         if (cues and not cfg.run.dry_run
                 and subtitles.should_write(salvage, cfg.run.regenerate)
                 and captions.existing_file(local, scene, src) is None):
-            self.write(cues, salvage, src, src, duration)
-            salvage_new = not captions.registered(scene, src)
+            self.write(cues, local, src, src, duration)
+            salvage_new = any(not captions.registered(scene, src, ext=f)
+                              for f in cfg.output.formats)
         if not cfg.ollama.url:
             log.info("  cannot produce %s: %s cannot translate and no OLLAMA_URL "
                      "is set. Set OLLAMA_URL, or TRANSLATE_MODEL=large-v3 for "

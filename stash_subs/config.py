@@ -121,6 +121,17 @@ class AnnotateCfg:
     text: str = ""             # empty means the built-in template
     seconds: float = 3.0
     gap: float = 1.0
+    # Write <file>.stash-subs.json alongside each subtitle. Off by default:
+    # it puts a second file in the media folder for something the marker
+    # already records.
+    sidecar: bool = False
+
+
+@dataclass(frozen=True)
+class OutputCfg:
+    # srt, vtt, or both. Emitting both gives Stash two caption tracks for
+    # the same language.
+    formats: list = field(default_factory=lambda: ["srt"])
 
 
 @dataclass(frozen=True)
@@ -146,11 +157,13 @@ class Config:
     tags: TagsCfg = field(default_factory=TagsCfg)
     ollama: OllamaCfg = field(default_factory=OllamaCfg)
     annotate: AnnotateCfg = field(default_factory=AnnotateCfg)
+    output: OutputCfg = field(default_factory=OutputCfg)
     run: RunCfg = field(default_factory=RunCfg)
     server: ServerCfg = field(default_factory=ServerCfg)
 
 
 ANNOTATE_MODES = ("none", "start", "end")
+OUTPUT_FORMATS = ("srt", "vtt")
 
 
 def from_env(env: Mapping[str, str] | None = None) -> Config:
@@ -160,6 +173,11 @@ def from_env(env: Mapping[str, str] | None = None) -> Config:
         raise ConfigError(
             f"ANNOTATE must be one of {', '.join(ANNOTATE_MODES)}, "
             f"got {cfg.annotate.mode!r}")
+    unknown = [f for f in cfg.output.formats if f not in OUTPUT_FORMATS]
+    if unknown or not cfg.output.formats:
+        raise ConfigError(
+            f"OUTPUT_FORMATS must be one or more of {', '.join(OUTPUT_FORMATS)}, "
+            f"got {', '.join(cfg.output.formats) or '(empty)'}")
     if cfg.annotate.text:
         from .subtitles import TemplateError, validate_template
         try:
@@ -207,6 +225,10 @@ def _build(env) -> Config:
             text=_get(env, "ANNOTATE_TEXT", ""),
             seconds=_float(env, "ANNOTATE_SECONDS", 3.0),
             gap=_float(env, "ANNOTATE_GAP", 1.0),
+            sidecar=_bool(env, "ANNOTATE_SIDECAR", False),
+        ),
+        output=OutputCfg(
+            formats=[f.lower() for f in _list(env, "OUTPUT_FORMATS", ["srt"])],
         ),
         run=RunCfg(
             poll_seconds=_int(env, "POLL_SECONDS", 120),

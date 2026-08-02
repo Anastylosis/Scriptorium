@@ -132,6 +132,20 @@ for anything produced while `ANNOTATE=none`.
 
 `OVERWRITE=1` still works and means `always`.
 
+### VTT and provenance
+
+`OUTPUT_FORMATS=vtt` writes WebVTT instead of SubRip; `OUTPUT_FORMATS=srt,vtt`
+writes both, which gives Stash two caption tracks for the same language.
+
+WebVTT has real comments, so a `NOTE` block at the top carries the full
+provenance as JSON — the models, the languages, the date, the cue count. It is
+invisible to every player. The visible marker cue is still written; the note is
+extra.
+
+`ANNOTATE_SIDECAR=1` writes the same JSON to `<subtitle>.stash-subs.json`. Off
+by default, because it puts a second file in your media folder to record
+something the marker already says. Stash ignores the extension.
+
 ## Work Stash already has
 
 The worker asks Stash which captions a scene already carries, so it does not
@@ -294,6 +308,8 @@ artefacts specific to your files.
 | `ANNOTATE_TEXT` | built-in | Template for the marker cue |
 | `ANNOTATE_SECONDS` | `3.0` | How long the marker shows |
 | `ANNOTATE_GAP` | `1.0` | Pause after the last real cue |
+| `ANNOTATE_SIDECAR` | `0` | Also write `<subtitle>.stash-subs.json` |
+| `OUTPUT_FORMATS` | `srt` | `srt`, `vtt`, or `srt,vtt` |
 | `POLL_SECONDS` | `120` | Queue poll interval |
 | `HTTP_PORT` | `8088` | Status page port |
 | `OLLAMA_PULL` | `1` | Auto-pull the model at startup |

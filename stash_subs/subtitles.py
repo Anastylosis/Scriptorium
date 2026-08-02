@@ -8,12 +8,14 @@ marker starts with a fixed sentinel, which also lets a later run recognise
 its own output and leave hand-made subtitles alone.
 """
 
+import json
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 MARKER = "[stash-subs]"
+SIDECAR_SUFFIX = ".stash-subs.json"
 
 DEFAULT_TEMPLATE = (
     "{marker} machine-generated subtitles · {asr_model}{mt_suffix} · "
@@ -30,12 +32,13 @@ _SNIFF_BYTES = 4096
 MAX_OVERSHOOT = 10.0
 
 
-def ts(seconds: float) -> str:
+def ts(seconds: float, decimal: str = ",") -> str:
+    """SRT separates milliseconds with a comma, WebVTT with a dot."""
     ms = max(0, int(round(seconds * 1000)))
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
     s, ms = divmod(ms, 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+    return f"{h:02d}:{m:02d}:{s:02d}{decimal}{ms:03d}"
 
 
 def cue_text(text: str) -> str:
@@ -52,13 +55,37 @@ def render_srt(cues) -> str:
     return "".join(out)
 
 
-def write_srt(cues, dest) -> None:
-    """Write atomically — a half-written SRT scanned by Stash is a bad time."""
+def render_vtt(cues, note=None) -> str:
+    """WebVTT, whose timestamps use a dot and which has real comments.
+
+    A NOTE block is invisible to every player, so the full provenance can
+    travel inside the subtitle file itself rather than in a sidecar.
+    """
+    out = ["WEBVTT\n\n"]
+    if note:
+        # A blank line ends a NOTE block, so the payload must not contain one.
+        body = re.sub(r"\n\s*\n+", "\n", str(note).strip())
+        out.append(f"NOTE\n{body}\n\n")
+    for i, (start, end, text) in enumerate(cues, 1):
+        out.append(f"{i}\n{ts(start, '.')} --> {ts(end, '.')}\n{cue_text(text)}\n\n")
+    return "".join(out)
+
+
+def render(cues, fmt="srt", note=None) -> str:
+    return render_vtt(cues, note=note) if fmt == "vtt" else render_srt(cues)
+
+
+def write_text(text, dest) -> None:
+    """Write atomically — a half-written file scanned by Stash is a bad time."""
     dest = Path(dest)
     tmp = Path(str(dest) + ".part")
     with open(tmp, "w", encoding="utf-8", newline="") as f:
-        f.write(render_srt(cues))
+        f.write(text)
     os.replace(tmp, dest)
+
+
+def write_srt(cues, dest) -> None:
+    write_text(render_srt(cues), dest)
 
 
 def dest_for(video: Path, lang: str, ext: str = "srt") -> Path:
@@ -97,6 +124,22 @@ class Provenance:
                           else f"{self.src_name} → {self.dst_name}"),
             "date": self.date,
         }
+
+
+    def as_dict(self, **extra):
+        d = {"tool": self.tool, "version": self.version,
+             "asr_model": self.asr_model, "mt_model": self.mt_model or None,
+             "src": self.src, "dst": self.dst, "generated": self.date}
+        d.update(extra)
+        return d
+
+    def as_json(self, **extra):
+        return json.dumps(self.as_dict(**extra), ensure_ascii=False,
+                          sort_keys=True)
+
+
+def sidecar_for(dest):
+    return Path(str(dest) + SIDECAR_SUFFIX)
 
 
 class TemplateError(ValueError):
