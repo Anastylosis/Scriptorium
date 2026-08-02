@@ -204,6 +204,11 @@ Source language is detected by sampling 45 seconds from the 25%, 50% and 75%
 marks of the file rather than trusting the first 30 seconds — intros and music
 fool the built-in detection constantly.
 
+Audio is decoded in-process through PyAV, which faster-whisper already depends
+on, so the image ships no `ffmpeg` binary and writes no temporary wav files. If
+you hit a container PyAV cannot open, an `ffmpeg` on `PATH` is used instead —
+add one in a derived image and it will be picked up.
+
 ## Performance and thread count
 
 Set `THREADS` to your **physical performance-core count**, not total threads.

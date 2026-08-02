@@ -8,10 +8,8 @@ LABEL org.opencontainers.image.title="stash-subs" \
       org.opencontainers.image.source="https://github.com/Wasylq/stash-subs" \
       org.opencontainers.image.licenses="GPL-3.0-only"
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
-
+# No ffmpeg package: PyAV is already a dependency of faster-whisper and its
+# wheel carries the FFmpeg libraries, so decoding needs no separate binary.
 COPY requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /tmp/requirements.txt && rm /tmp/requirements.txt

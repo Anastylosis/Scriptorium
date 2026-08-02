@@ -1,9 +1,7 @@
 """Whisper transcription and the hallucination filter."""
 
 import logging
-import os
 import re
-import tempfile
 
 from . import audio
 
@@ -86,15 +84,18 @@ class Models:
         return self._cache[name]
 
     def detect_language(self, path, duration):
-        with tempfile.TemporaryDirectory() as td:
-            wav = os.path.join(td, "sample.wav")
-            try:
-                audio.sample(path, duration, wav)
-            except Exception as e:
-                log.info("  language sampling failed (%s); falling back to file start", e)
-                wav = str(path)
-            _, info = self.get().transcribe(wav, language=None, vad_filter=True, beam_size=1)
-            return info.language, info.language_probability
+        try:
+            sample = audio.language_sample(path, duration)
+        except Exception as e:
+            # Bounded on purpose. Handing the whole file to transcribe() costs
+            # minutes on a long scene, because faster-whisper computes the
+            # full log-mel before yielding anything.
+            log.info("  language sampling failed (%s); using the first %.0fs",
+                     e, audio.FALLBACK_SECONDS)
+            sample = audio.decode_window(path, 0.0, audio.FALLBACK_SECONDS)
+        _, info = self.get().transcribe(sample, language=None, vad_filter=True,
+                                        beam_size=1)
+        return info.language, info.language_probability
 
     def transcribe(self, path, language, task="transcribe", model=None, on_progress=None):
         segments, info = self.get(model).transcribe(
