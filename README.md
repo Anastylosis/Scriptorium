@@ -9,7 +9,7 @@ Copy `docker-compose.example.yml` to `docker-compose.yml`, point the first
 volume at your video library, and start it:
 
 ```sh
-curl -O https://raw.githubusercontent.com/Wasylq/stash-subs/master/docker-compose.example.yml
+curl -O https://raw.githubusercontent.com/Anastylosis/stash-subs/master/docker-compose.example.yml
 mv docker-compose.example.yml docker-compose.yml
 $EDITOR docker-compose.yml
 docker compose up -d
@@ -18,7 +18,7 @@ docker compose up -d
 Images are published for `linux/amd64` and `linux/arm64`:
 
 ```sh
-docker pull ghcr.io/wasylq/stash-subs:latest
+docker pull ghcr.io/anastylosis/stash-subs:latest
 ```
 
 The worker needs to see your videos at the same path Stash reports for them.
