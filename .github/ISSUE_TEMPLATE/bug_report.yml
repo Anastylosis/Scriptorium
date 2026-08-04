@@ -37,7 +37,7 @@ body:
     id: version
     attributes:
       label: Image tag
-      placeholder: "ghcr.io/wasylq/stash-subs:0.5.0"
+      placeholder: "ghcr.io/anastylosis/stash-subs:0.5.0"
     validations:
       required: true
 

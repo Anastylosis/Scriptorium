@@ -1,6 +1,6 @@
 services:
   stash-subs:
-    image: ghcr.io/wasylq/stash-subs:latest
+    image: ghcr.io/anastylosis/stash-subs:latest
     # build: .
     container_name: stash-subs
     volumes:

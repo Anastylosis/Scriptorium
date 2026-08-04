@@ -101,7 +101,7 @@ PAGE = """<!doctype html>
 <h1>stash-subs</h1>
 {body}
 <div class="card"><h2>Log</h2><pre>{logs}</pre></div>
-<p class="meta"><a href="https://github.com/Wasylq/stash-subs">stash-subs</a>
+<p class="meta"><a href="https://github.com/Anastylosis/stash-subs">stash-subs</a>
 {version} &middot; auto-refreshes every 5s &middot; uptime {uptime}</p>
 </div></body></html>"""
 

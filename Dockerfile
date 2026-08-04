@@ -5,7 +5,7 @@ FROM python:${PYTHON_VERSION}-slim
 
 LABEL org.opencontainers.image.title="stash-subs" \
       org.opencontainers.image.description="Tag-driven subtitle generation for Stash" \
-      org.opencontainers.image.source="https://github.com/Wasylq/stash-subs" \
+      org.opencontainers.image.source="https://github.com/Anastylosis/stash-subs" \
       org.opencontainers.image.licenses="GPL-3.0-only"
 
 # No ffmpeg package: PyAV is already a dependency of faster-whisper and its
