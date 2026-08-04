@@ -14,8 +14,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-MARKER = "[stash-subs]"
-SIDECAR_SUFFIX = ".stash-subs.json"
+MARKER = "[scriptorium]"
+# stash-subs (this project's former name) shipped subtitles carrying this
+# marker. Files written under that name are still out there and must be
+# recognised forever — moansubs, the other consumer of this marker, already
+# does dual-marker detection on its side.
+OLD_MARKER = "[stash-subs]"
+SIDECAR_SUFFIX = ".scriptorium.json"
 
 DEFAULT_TEMPLATE = (
     "{marker} machine-generated subtitles · {asr_model}{mt_suffix} · "
@@ -132,8 +137,10 @@ def without_marker(cues):
 
     Re-using a transcript we wrote must not feed the marker to the
     translator, which would translate it and then have it annotated again.
+    Old files may carry the marker this project shipped before it was
+    renamed from stash-subs, so both are checked.
     """
-    return [c for c in cues if MARKER not in c[2]]
+    return [c for c in cues if MARKER not in c[2] and OLD_MARKER not in c[2]]
 
 
 def load(path):
@@ -153,7 +160,7 @@ def dest_for(video: Path, lang: str, ext: str = "srt") -> Path:
 
 @dataclass(frozen=True)
 class Provenance:
-    tool: str = "stash-subs"
+    tool: str = "scriptorium"
     version: str = ""
     asr_model: str = ""
     mt_model: str = ""
@@ -260,7 +267,7 @@ def with_annotation(cues, prov, **kw):
 
 
 def looks_generated(path) -> bool:
-    """True when this file carries our marker.
+    """True when this file carries our marker, current or pre-rename.
 
     Only the head and tail are read, so this stays cheap on a large file and
     works whether the marker was placed at the start or the end.
@@ -277,7 +284,7 @@ def looks_generated(path) -> bool:
     except OSError:
         return False
     blob = (head + tail).decode("utf-8", "replace")
-    return MARKER in blob
+    return MARKER in blob or OLD_MARKER in blob
 
 
 def should_write(dest, regenerate="never") -> bool:

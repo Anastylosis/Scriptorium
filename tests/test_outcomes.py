@@ -1,6 +1,6 @@
 import pytest
 
-from stash_subs import outcomes
+from scriptorium import outcomes
 
 
 def t(action, **kw):

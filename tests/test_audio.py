@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from stash_subs import audio
+from scriptorium import audio
 
 av = pytest.importorskip("av")
 

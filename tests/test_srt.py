@@ -1,4 +1,4 @@
-from stash_subs import subtitles as s
+from scriptorium import subtitles as s
 
 
 def test_ts_golden():

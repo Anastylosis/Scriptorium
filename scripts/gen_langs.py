@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Regenerate stash_subs/_langtable.py from the ISO 639-2 registry.
+"""Regenerate scriptorium/_langtable.py from the ISO 639-2 registry.
 
-    python scripts/gen_langs.py > stash_subs/_langtable.py
+    python scripts/gen_langs.py > scriptorium/_langtable.py
 
 The registry is pipe-delimited:
     alpha3-bibliographic | alpha3-terminologic | alpha2 | English | French
@@ -35,7 +35,7 @@ EXTRA = {
 
 
 def main():
-    req = urllib.request.Request(URL, headers={"User-Agent": "stash-subs gen_langs"})
+    req = urllib.request.Request(URL, headers={"User-Agent": "scriptorium gen_langs"})
     raw = urllib.request.urlopen(req, timeout=60).read().decode("utf-8-sig")
 
     names = {}

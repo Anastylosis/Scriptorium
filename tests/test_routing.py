@@ -1,8 +1,8 @@
 import pytest
 
-from stash_subs import config, status
-from stash_subs.asr import whisper_translates
-from stash_subs.translate import resolve_mode
+from scriptorium import config, status
+from scriptorium.asr import whisper_translates
+from scriptorium.translate import resolve_mode
 
 
 @pytest.mark.parametrize("model,translates", [

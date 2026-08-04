@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from stash_subs import config
-from stash_subs.subtitles import (
+from scriptorium import config
+from scriptorium.subtitles import (
     MARKER,
     Provenance,
     Path,
@@ -42,7 +42,7 @@ def test_the_note_block_carries_parseable_provenance():
     body = render_vtt(CUES, note=PROV.as_json(cues=2))
     block = body.split("NOTE\n")[1].split("\n\n")[0]
     data = json.loads(block)
-    assert data["tool"] == "stash-subs"
+    assert data["tool"] == "scriptorium"
     assert data["asr_model"] == "large-v3-turbo"
     assert data["src"] == "es" and data["dst"] == "en"
     assert data["cues"] == 2
@@ -86,7 +86,7 @@ def test_dest_extension_follows_the_format():
 
 
 def test_sidecar_sits_beside_the_subtitle():
-    assert sidecar_for(Path("/data/clip.en.srt")).name == "clip.en.srt.stash-subs.json"
+    assert sidecar_for(Path("/data/clip.en.srt")).name == "clip.en.srt.scriptorium.json"
 
 
 # -- config ----------------------------------------------------------------

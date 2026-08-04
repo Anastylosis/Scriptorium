@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from stash_subs import asr as s
+from scriptorium import asr as s
 
 
 def seg(start, end, text, no_speech_prob=0.0, compression_ratio=1.0):

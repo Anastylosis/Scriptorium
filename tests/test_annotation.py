@@ -1,10 +1,11 @@
 import pytest
 
-from stash_subs import config
-from stash_subs.subtitles import (
+from scriptorium import config
+from scriptorium.subtitles import (
     DEFAULT_TEMPLATE,
     MARKER,
     MAX_OVERSHOOT,
+    OLD_MARKER,
     Provenance,
     TemplateError,
     annotation_cue,
@@ -193,6 +194,15 @@ def test_looks_generated_on_a_missing_file_is_false(tmp_path):
     assert not looks_generated(tmp_path / "nope.srt")
 
 
+def test_looks_generated_still_recognises_the_pre_rename_marker(tmp_path):
+    # Files written by this project under its old name, stash-subs, are
+    # still out there and must be treated as ours forever.
+    f = tmp_path / "a.en.srt"
+    f.write_text(render_srt([(1.0, 3.0, f"{OLD_MARKER} machine-generated")]),
+                encoding="utf-8")
+    assert looks_generated(f)
+
+
 # -- regenerate ------------------------------------------------------------
 
 def test_never_leaves_an_existing_file_alone(tmp_path):
@@ -219,6 +229,13 @@ def test_if_ours_overwrites_our_output_but_not_a_hand_made_file(tmp_path):
     theirs.write_text("1\n00:00:01,000 --> 00:00:03,000\nhello\n\n", encoding="utf-8")
     assert should_write(ours, "if-ours")
     assert not should_write(theirs, "if-ours")
+
+
+def test_if_ours_also_overwrites_pre_rename_output(tmp_path):
+    old = tmp_path / "old.en.srt"
+    old.write_text(render_srt([(1.0, 3.0, f"{OLD_MARKER} machine-generated")]),
+                   encoding="utf-8")
+    assert should_write(old, "if-ours")
 
 
 def test_overwrite_env_still_means_always():

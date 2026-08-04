@@ -1,6 +1,6 @@
 import pytest
 
-from stash_subs import config
+from scriptorium import config
 
 
 def test_empty_environment_yields_working_defaults():

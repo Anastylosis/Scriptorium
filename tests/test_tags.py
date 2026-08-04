@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from stash_subs import config, status, tags
-from stash_subs.worker import Worker
+from scriptorium import config, status, tags
+from scriptorium.worker import Worker
 
 
 class FakeClient:

@@ -1,9 +1,9 @@
-# stash-subs — common dev targets.
+# scriptorium — common dev targets.
 #
 # Everything runs in a container, so a checkout needs nothing installed but
 # Docker. Run `make help` for the list.
 
-IMAGE   ?= stash-subs:dev
+IMAGE   ?= scriptorium:dev
 PY      ?= python:3.12-slim
 # Run the repo inside $(PY) with the dev dependencies installed.
 INPY     = docker run --rm -v "$(CURDIR)":/w -w /w $(PY) sh -c \
@@ -42,13 +42,13 @@ image: ## Build the container image.
 
 .PHONY: pins
 pins: image ## Verify requirements.txt still matches what the image installs.
-	@docker run --rm --entrypoint pip $(IMAGE) freeze | sort > /tmp/stash-subs-freeze
-	@grep -v '^#' requirements.txt | grep -v '^$$' | sort > /tmp/stash-subs-pins
-	@diff -u /tmp/stash-subs-pins /tmp/stash-subs-freeze && echo "pins are exact"
+	@docker run --rm --entrypoint pip $(IMAGE) freeze | sort > /tmp/scriptorium-freeze
+	@grep -v '^#' requirements.txt | grep -v '^$$' | sort > /tmp/scriptorium-pins
+	@diff -u /tmp/scriptorium-pins /tmp/scriptorium-freeze && echo "pins are exact"
 
 .PHONY: langs
 langs: ## Regenerate the ISO 639 table from the registry.
-	python3 scripts/gen_langs.py > stash_subs/_langtable.py
+	python3 scripts/gen_langs.py > scriptorium/_langtable.py
 
 .PHONY: audit
 audit: ## Report known vulnerabilities in the pinned dependencies.
@@ -64,4 +64,4 @@ run: image ## Run against a Stash at $$STASH_URL, draining the queue once.
 
 .PHONY: clean
 clean: ## Remove caches.
-	rm -rf .pytest_cache .ruff_cache __pycache__ stash_subs/__pycache__ tests/__pycache__
+	rm -rf .pytest_cache .ruff_cache __pycache__ scriptorium/__pycache__ tests/__pycache__

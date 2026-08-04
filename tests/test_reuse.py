@@ -1,8 +1,9 @@
 """Parsing existing subtitles, and translating from them instead of the audio."""
 
-from stash_subs import config, status, subtitles
-from stash_subs.subtitles import (
+from scriptorium import config, status, subtitles
+from scriptorium.subtitles import (
     MARKER,
+    OLD_MARKER,
     Provenance,
     load,
     parse,
@@ -11,7 +12,7 @@ from stash_subs.subtitles import (
     with_annotation,
     without_marker,
 )
-from stash_subs.worker import Worker
+from scriptorium.worker import Worker
 
 CUES = [(1.0, 3.25, "first line"), (10.5, 12.0, "second line")]
 PROV = Provenance(asr_model="tiny", src="en", src_name="English",
@@ -89,6 +90,20 @@ def test_a_file_holding_only_our_marker_is_not_a_usable_source(tmp_path):
     f = tmp_path / "clip.en.srt"
     f.write_text(render_srt([(1.0, 3.0, f"{MARKER} generated")]), encoding="utf-8")
     assert load(f) is None
+
+
+def test_without_marker_also_strips_the_pre_rename_marker():
+    # Old cues carrying the marker this project shipped as stash-subs must
+    # be recognised too, or a stale one would be fed to the translator.
+    old_cue = (1.0, 3.0, f"{OLD_MARKER} generated")
+    assert without_marker(CUES + [old_cue]) == CUES
+
+
+def test_loading_pre_rename_output_strips_its_marker_too(tmp_path):
+    f = tmp_path / "clip.en.srt"
+    cues = CUES + [(20.0, 22.0, f"{OLD_MARKER} machine-generated")]
+    f.write_text(render_srt(cues), encoding="utf-8")
+    assert load(f) == CUES
 
 
 # -- the worker uses it ----------------------------------------------------

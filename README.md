@@ -1,7 +1,13 @@
-# stash-subs
+# Scriptorium
+
+*(formerly stash-subs)*
 
 Tag-driven subtitle generation for Stash. You mark the scenes you want; nothing
 else in the library is ever read.
+
+This is a Stash-focused tool today. The longer-term direction is a general
+self-hosted transcription/translation service with per-backend plugins, but
+that does not exist yet — everything below describes what is actually here.
 
 ## Install
 
@@ -9,7 +15,7 @@ Copy `docker-compose.example.yml` to `docker-compose.yml`, point the first
 volume at your video library, and start it:
 
 ```sh
-curl -O https://raw.githubusercontent.com/Anastylosis/stash-subs/master/docker-compose.example.yml
+curl -O https://raw.githubusercontent.com/Anastylosis/Scriptorium/master/docker-compose.example.yml
 mv docker-compose.example.yml docker-compose.yml
 $EDITOR docker-compose.yml
 docker compose up -d
@@ -18,7 +24,7 @@ docker compose up -d
 Images are published for `linux/amd64` and `linux/arm64`:
 
 ```sh
-docker pull ghcr.io/anastylosis/stash-subs:latest
+docker pull ghcr.io/anastylosis/scriptorium:latest
 ```
 
 The worker needs to see your videos at the same path Stash reports for them.
@@ -92,7 +98,7 @@ reached by translating from the spoken language, which needs `OLLAMA_URL`.
 Every file the worker writes ends with a short cue naming what produced it:
 
 ```
-[stash-subs] machine-generated subtitles · large-v3-turbo + translategemma:4b · Spanish → English · 2026-08-02
+[scriptorium] machine-generated subtitles · large-v3-turbo + translategemma:4b · Spanish → English · 2026-08-02
 ```
 
 A transcript that was not translated names one language rather than two.
@@ -117,7 +123,9 @@ transcription.
 
 ### Regenerating
 
-The `[stash-subs]` marker is how a later run recognises its own work:
+The `[scriptorium]` marker is how a later run recognises its own work. Files
+carrying the `[stash-subs]` marker — this project's name before it was
+renamed — are recognised too, forever:
 
 | `REGENERATE` | Behaviour |
 |---|---|
@@ -142,7 +150,7 @@ provenance as JSON — the models, the languages, the date, the cue count. It is
 invisible to every player. The visible marker cue is still written; the note is
 extra.
 
-`ANNOTATE_SIDECAR=1` writes the same JSON to `<subtitle>.stash-subs.json`. Off
+`ANNOTATE_SIDECAR=1` writes the same JSON to `<subtitle>.scriptorium.json`. Off
 by default, because it puts a second file in your media folder to record
 something the marker already says. Stash ignores the extension.
 
@@ -334,7 +342,7 @@ artefacts specific to your files.
 | `ANNOTATE_TEXT` | built-in | Template for the marker cue |
 | `ANNOTATE_SECONDS` | `3.0` | How long the marker shows |
 | `ANNOTATE_GAP` | `1.0` | Pause after the last real cue |
-| `ANNOTATE_SIDECAR` | `0` | Also write `<subtitle>.stash-subs.json` |
+| `ANNOTATE_SIDECAR` | `0` | Also write `<subtitle>.scriptorium.json` |
 | `OUTPUT_FORMATS` | `srt` | `srt`, `vtt`, or `srt,vtt` |
 | `REUSE_TRANSCRIPT` | `1` | Translate from an existing transcript instead of re-transcribing |
 | `POLL_SECONDS` | `120` | Queue poll interval |

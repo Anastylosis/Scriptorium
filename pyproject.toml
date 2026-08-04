@@ -1,5 +1,5 @@
 [project]
-name = "stash-subs"
+name = "scriptorium"
 version = "0.7.1"
 description = "Tag-driven subtitle generation for Stash"
 license = "GPL-3.0-only"

@@ -60,7 +60,7 @@ class Store:
 
 
 PAGE = """<!doctype html>
-<html><head><meta charset="utf-8"><title>stash-subs</title>
+<html><head><meta charset="utf-8"><title>Scriptorium</title>
 <meta http-equiv="refresh" content="5">
 <style>
   body {{ background:#16181d; color:#d6d9de; margin:0;
@@ -98,10 +98,10 @@ PAGE = """<!doctype html>
   button:hover {{ background:#343945; }}
   .note {{ color:#7cb8ff; font-size:12.5px; margin-top:10px; }}
 </style></head><body><div class="wrap">
-<h1>stash-subs</h1>
+<h1>Scriptorium</h1>
 {body}
 <div class="card"><h2>Log</h2><pre>{logs}</pre></div>
-<p class="meta"><a href="https://github.com/Anastylosis/stash-subs">stash-subs</a>
+<p class="meta"><a href="https://github.com/Anastylosis/Scriptorium">Scriptorium</a>
 {version} &middot; auto-refreshes every 5s &middot; uptime {uptime}</p>
 </div></body></html>"""
 
