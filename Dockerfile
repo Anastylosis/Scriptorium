@@ -3,9 +3,9 @@ ARG PYTHON_VERSION=3.12
 
 FROM python:${PYTHON_VERSION}-slim
 
-LABEL org.opencontainers.image.title="stash-subs" \
+LABEL org.opencontainers.image.title="Scriptorium" \
       org.opencontainers.image.description="Tag-driven subtitle generation for Stash" \
-      org.opencontainers.image.source="https://github.com/Anastylosis/stash-subs" \
+      org.opencontainers.image.source="https://github.com/Anastylosis/Scriptorium" \
       org.opencontainers.image.licenses="GPL-3.0-only"
 
 # No ffmpeg package: PyAV is already a dependency of faster-whisper and its
@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED=1 \
     HTTP_PORT=8088
 
 WORKDIR /app
-COPY stash_subs/ /app/stash_subs/
+COPY scriptorium/ /app/scriptorium/
 
 VOLUME ["/models"]
 EXPOSE 8088
@@ -32,4 +32,4 @@ EXPOSE 8088
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD ["python", "-c", "import os,urllib.request;urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('HTTP_PORT','8088')+'/json',timeout=5)"]
 
-ENTRYPOINT ["python", "-m", "stash_subs"]
+ENTRYPOINT ["python", "-m", "scriptorium"]

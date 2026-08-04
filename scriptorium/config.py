@@ -121,7 +121,7 @@ class AnnotateCfg:
     text: str = ""             # empty means the built-in template
     seconds: float = 3.0
     gap: float = 1.0
-    # Write <file>.stash-subs.json alongside each subtitle. Off by default:
+    # Write <file>.scriptorium.json alongside each subtitle. Off by default:
     # it puts a second file in the media folder for something the marker
     # already records.
     sidecar: bool = False

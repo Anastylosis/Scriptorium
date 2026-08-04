@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from stash_subs import captions
-from stash_subs.stash import Client, StashError
+from scriptorium import captions
+from scriptorium.stash import Client, StashError
 
 VIDEO = Path("/data/clip.mp4")
 

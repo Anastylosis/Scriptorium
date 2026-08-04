@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from stash_subs import config
-from stash_subs.translate import Ollama, TranslateError
+from scriptorium import config
+from scriptorium.translate import Ollama, TranslateError
 
 CUES = [(0.0, 1.0, "one"), (1.0, 2.0, "two"), (2.0, 3.0, "three")]
 

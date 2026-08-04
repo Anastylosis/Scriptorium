@@ -2,7 +2,7 @@
 
 ## Credentials
 
-The only credential stash-subs handles is your **Stash API key**, needed when
+The only credential Scriptorium handles is your **Stash API key**, needed when
 authentication is enabled on your Stash instance.
 
 Pass it as the `STASH_API_KEY` environment variable. It is never written to
@@ -15,7 +15,7 @@ forum post when asking for help.
 
 ## Network
 
-stash-subs makes outbound requests to:
+Scriptorium makes outbound requests to:
 
 - **Your Stash instance** (default `http://stash:9999`) — GraphQL only.
 - **Your Ollama instance**, if `OLLAMA_URL` is set — translation only.

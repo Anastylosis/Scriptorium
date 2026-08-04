@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from stash_subs.paths import PathMapper
+from scriptorium.paths import PathMapper
 
 
 def test_identity_mapping_is_a_no_op():

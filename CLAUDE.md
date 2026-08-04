@@ -15,7 +15,7 @@ Everything runs in a container; a checkout needs only Docker.
 make check    # ruff + pytest, the same gate CI applies
 make image
 make pins     # requirements.txt must equal `pip freeze` in the built image
-make langs    # regenerate stash_subs/_langtable.py (generated, don't hand-edit)
+make langs    # regenerate scriptorium/_langtable.py (generated, don't hand-edit)
 ```
 
 ## Layout
@@ -108,9 +108,26 @@ anything that writes a file or talks to Stash, run it** — a stub Stash plus
 - Match the sibling repos (`../fss`, `../StashJanitor`): exact-pinned Actions,
   justified lint exclusions.
 
+## Provenance marker
+
+`MARKER` in `subtitles.py` is a wire contract with moansubs, which parses it
+out of subtitle files it ingests. Any node consuming provenance must know a
+marker string before a release emits it, so renaming the project could not
+just swap the string: `OLD_MARKER = "[stash-subs]"` (this project's name
+before the Anastylosis move) stays recognised by `looks_generated()` and
+`without_marker()` forever, alongside the current `MARKER = "[scriptorium]"`.
+moansubs already does dual-marker detection on its side. The provenance
+JSON's `tool` field changed to `"scriptorium"`; the shape
+(`tool`/`version`/`asr_model`/`mt_model`/`src`/`dst`/`generated`) did not.
+
+The optional sidecar (`ANNOTATE_SIDECAR=1`) moved from `.stash-subs.json` to
+`.scriptorium.json` for new writes. Nothing in this codebase reads a sidecar
+back — it is a write-only convenience file — so there is no dual-suffix glob
+to maintain here, unlike the marker.
+
 ## Releasing
 
-Bump `pyproject.toml` **and** `stash_subs/__init__.py`, then tag `vX.Y.Z`.
+Bump `pyproject.toml` **and** `scriptorium/__init__.py`, then tag `vX.Y.Z`.
 `release.yml` refuses a tag that disagrees with the declared version — the
 version is baked into every subtitle's provenance, so a stale one mislabels
 files that outlive the container.

@@ -1,7 +1,7 @@
 """When the real queue loop asks Stash to rescan."""
 
-from stash_subs import config, outcomes, status, tags
-from stash_subs.worker import Worker
+from scriptorium import config, outcomes, status, tags
+from scriptorium.worker import Worker
 
 
 class Client:

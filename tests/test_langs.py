@@ -1,6 +1,6 @@
 import pytest
 
-from stash_subs import langs
+from scriptorium import langs
 
 
 @pytest.mark.parametrize("code", ["en", "es", "pt", "zh", "cy", "eng", "por", "deu", "yue"])
