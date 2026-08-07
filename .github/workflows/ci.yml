@@ -1,14 +1,11 @@
 name: CI
 
-# Actions are pinned to exact versions, not moving major tags. A major tag
-# like @v7 advances whenever v7.x ships, so an unrelated commit can turn CI
-# red. Dependabot proposes bumps; they land deliberately.
-
 on:
   push:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -18,42 +15,12 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7.0.1
+  ci:
+    uses: Anastylosis/.github/.github/workflows/python-ci.yml@v1
+    permissions:
+      contents: read
+    with:
+      python-version: '3.12'
 
-      - uses: actions/setup-python@v7.0.0
-        with:
-          python-version: '3.12'
-
-      # The worker imports nothing outside the standard library at module
-      # scope (faster-whisper is imported lazily inside get_model), so the
-      # suite runs without the multi-hundred-megabyte inference stack.
-      - name: Install dev dependencies
-        run: pip install -r requirements-dev.txt
-
-      - run: ruff check .
-
-      - run: python -m pytest tests/ -q
-
-  audit:
-    name: Audit dependencies
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7.0.1
-
-      - uses: actions/setup-python@v7.0.0
-        with:
-          python-version: '3.12'
-
-      - run: pip install pip-audit==2.9.0
-
-      # Informational. A gate here would turn CI red on someone else's
-      # advisory and force dependency bumps on their schedule rather than
-      # on a deliberate decision.
-      - run: pip-audit -r requirements.txt || echo "::warning::pip-audit reported findings"
-
-# Image builds live in docker-dev.yml (branch and sha tags) and release.yml
+# Image builds live in docker.yml (branch and sha tags) and release.yml
 # (version tags), so they are not duplicated here.

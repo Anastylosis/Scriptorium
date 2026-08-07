@@ -1,9 +1,5 @@
 name: Release
 
-# Actions are pinned to exact versions, not moving major tags. A major tag
-# like @v7 advances whenever v7.x ships, so an unrelated commit can turn CI
-# red. Dependabot proposes bumps; they land deliberately.
-
 on:
   push:
     tags:
@@ -17,26 +13,18 @@ permissions:
   contents: read
 
 jobs:
-  docker:
-    name: Build and push image
+  # Local, because it is genuinely specific to this project: the version is
+  # baked into every generated subtitle's provenance and shown on the status
+  # page, so a stale one mislabels output that outlives the container. It has
+  # silently drifted twice. A test comparing pyproject.toml with __init__.py
+  # cannot catch it — both go stale together — so the tag is the referee.
+  version:
+    name: Check the tag matches the declared version
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      # actions/attest-build-provenance needs OIDC + attestation write.
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/checkout@v7.0.1
-        with:
-          fetch-depth: 0
 
-      - name: Check the tag matches the declared version
-        # The version is baked into every generated subtitle's provenance and
-        # shown on the status page, so a stale one mislabels output. It has
-        # silently drifted twice; a test that only compares pyproject.toml
-        # with __init__.py cannot catch it, because both go stale together.
-        run: |
+      - run: |
           tag="${GITHUB_REF#refs/tags/v}"
           declared=$(python3 -c "import tomllib,pathlib; \
             print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
@@ -46,75 +34,36 @@ jobs:
             exit 1
           fi
 
-      - name: Lowercase image repo
-        # OCI references must be all-lowercase and ${{ github.repository }}
-        # can contain uppercase; GitHub expressions have no case conversion.
-        # docker/metadata-action lowercases the pushed tags itself, but Trivy
-        # and the release notes need the same treatment or they emit refs
-        # that do not resolve.
-        run: echo "IMAGE_REPO_LC=ghcr.io/${REPO,,}" >> "$GITHUB_ENV"
-        env:
-          REPO: ${{ github.repository }}
+  # The whole build/attest/scan pipeline is shared. Nothing about it was ever
+  # specific to this project — it had simply been copied.
+  docker:
+    needs: version
+    uses: Anastylosis/.github/.github/workflows/docker-publish.yml@v1
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      mode: release
+      # No go.mod to read a toolchain from, and the Dockerfile declares no
+      # VERSION/COMMIT/DATE build args.
+      go-version-build-arg: false
+      version-build-args: false
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4.2.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.2.0
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
+  # go-release.yml does not fit here: it runs `go test` and builds Go
+  # binaries, and this project ships an image rather than executables. The
+  # image *is* the artifact, so the release note points at it.
+  notes:
+    needs: docker
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Compute image metadata
-        id: meta
-        uses: docker/metadata-action@v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
-
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v7.3.0
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          # provenance: true embeds attestation manifests in the image index
-          # as `unknown/unknown` entries, which clutters GHCR's UI. SLSA
-          # provenance is generated below and stored on the workflow run.
-          provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Attest build provenance
-        # Verify with:
-        #   gh attestation verify oci://ghcr.io/<owner>/<repo>@<digest> --owner <owner>
-        uses: actions/attest-build-provenance@v4.1.1
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-          push-to-registry: false
-
-      - name: Trivy scan (informational)
-        # exit-code 0: a fail-on-any-finding gate would force base-image
-        # bumps on every new CVE. Findings show up in the log; bump deliberately.
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_REPO_LC }}@${{ steps.build.outputs.digest }}
-          severity: HIGH,CRITICAL
-          format: table
-          exit-code: '0'
-          ignore-unfixed: true
+          fetch-depth: 0
 
       - name: Generate changelog
         id: changelog
@@ -125,9 +74,22 @@ jobs:
           else
             CHANGELOG=$(git log --oneline --no-merges "${PREV_TAG}..HEAD")
           fi
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "changelog<<CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Resolve image reference
+        # OCI references must be lowercase and ${{ github.repository }} can
+        # contain uppercase; GitHub expressions have no case conversion. The
+        # published tag also has no `v` — docker/metadata-action strips it.
+        id: image
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          echo "repo=ghcr.io/${REPO,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.2
@@ -141,18 +103,18 @@ jobs:
             ## Image
 
             ```sh
-            docker pull ${{ env.IMAGE_REPO_LC }}:${{ steps.meta.outputs.version }}
+            docker pull ${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }}
             ```
 
             Or `:latest`. Note the published tag has no `v` prefix —
             docker/metadata-action strips it from the git tag.
 
-            `linux/amd64` and `linux/arm64`. Digest: `${{ steps.build.outputs.digest }}`
+            `linux/amd64` and `linux/arm64`.
 
             Verify the build provenance:
 
             ```sh
             gh attestation verify \
-              oci://${{ env.IMAGE_REPO_LC }}@${{ steps.build.outputs.digest }} \
+              oci://${{ steps.image.outputs.repo }}:${{ steps.image.outputs.tag }} \
               --owner ${{ github.repository_owner }}
             ```
