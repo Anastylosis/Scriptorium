@@ -1,5 +1,8 @@
 # Scriptorium
 
+[![CI](https://github.com/Anastylosis/Scriptorium/actions/workflows/ci.yml/badge.svg)](https://github.com/Anastylosis/Scriptorium/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Anastylosis/Scriptorium/branch/master/graph/badge.svg)](https://codecov.io/gh/Anastylosis/Scriptorium)
+
 *(formerly stash-subs)*
 
 Tag-driven subtitle generation for Stash. You mark the scenes you want; nothing
