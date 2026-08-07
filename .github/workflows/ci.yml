@@ -19,8 +19,12 @@ jobs:
     uses: Anastylosis/.github/.github/workflows/python-ci.yml@v1
     permissions:
       contents: read
+      # Required by the Codecov upload, which authenticates via OIDC. Without
+      # it the run fails at startup before any step executes.
+      id-token: write
     with:
       python-version: '3.12'
+      coverage-source: scriptorium
 
 # Image builds live in docker.yml (branch and sha tags) and release.yml
 # (version tags), so they are not duplicated here.

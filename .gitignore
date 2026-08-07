@@ -13,3 +13,7 @@ htmlcov/
 *.log
 /config.yaml
 /models/
+
+# Coverage output from `pytest --cov`.
+coverage.xml
+.coverage
