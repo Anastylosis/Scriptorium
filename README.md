@@ -378,3 +378,9 @@ what the worker sends.
 **Path not visible to this container.** Stash and the worker must see the same
 video at the same container path. If they cannot, set `PATH_FROM` / `PATH_TO`
 to map between them.
+
+## License
+
+Copyright (C) 2026 Wasylq
+
+[GPL-3.0-only](LICENSE).
