@@ -1,6 +1,6 @@
 [project]
 name = "scriptorium"
-version = "0.7.1"
+version = "0.7.2"
 description = "Tag-driven subtitle generation for Stash"
 license = "GPL-3.0-only"
 # Declared so Dependabot does not propose bumps that need a newer
