@@ -15,6 +15,12 @@ from .translate import Ollama
 
 log = logging.getLogger(__name__)
 
+# Directories awaiting a rescan are flushed at the end of the cycle, but a
+# queue can take hours, and a caption Stash has not been told about is
+# invisible until it is. This bounds that wait without going back to a job
+# per scene.
+SCAN_BATCH = 25
+
 
 class Control:
     """Wakeup, pause and stop signalling for the single worker thread."""
@@ -357,6 +363,24 @@ class Worker:
             log.info("  source transcript kept as %s", salvage.name)
             return None, salvage_new, (outcomes.ERROR, f"translation failed: {e}")
 
+    def flush_scans(self, pending):
+        """Ask Stash to rescan the directories that gained a caption.
+
+        One job for the batch rather than one per scene: the old shape had
+        Stash rescanning a directory once per file written into it, which on a
+        long queue keeps a scan running continuously against the same database
+        the worker is still swapping tags in.
+        """
+        if not pending:
+            return
+        paths = sorted(pending)
+        pending.clear()
+        try:
+            self.client.metadata_scan(paths)
+        except Exception as e:
+            log.error("  could not ask Stash to rescan %d path(s): %s",
+                      len(paths), e)
+
     def swap_tags(self, scene, ok):
         """Replace the request tags with done/failed.
 
@@ -400,6 +424,7 @@ class Worker:
             self.store.update(queue=len(scenes))
             if scenes:
                 log.info("queue: %d scene(s)", len(scenes))
+            pending_scans = set()
             for i, scene in enumerate(scenes):
                 if self.control.stopping or self.control.paused:
                     break
@@ -416,11 +441,17 @@ class Worker:
                 try:
                     self.swap_tags(scene, result.ok)
                     if result.needs_scan:
-                        parent = str(Path(scene["files"][0]["path"]).parent)
                         # The Stash-side path, not the mapped local one.
-                        self.client.metadata_scan(parent)
+                        pending_scans.add(
+                            str(Path(scene["files"][0]["path"]).parent))
                 except Exception as e:
                     log.error("  could not update tags: %s", e)
+                if len(pending_scans) >= SCAN_BATCH:
+                    self.flush_scans(pending_scans)
+
+            # Also covers breaking out of the loop for pause or stop, so a
+            # written caption is never left unregistered.
+            self.flush_scans(pending_scans)
 
             if cfg.run.run_once:
                 log.info("done (RUN_ONCE)")
