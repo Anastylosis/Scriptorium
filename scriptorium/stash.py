@@ -120,9 +120,14 @@ class Client:
             {"i": {"id": scene_id, "tag_ids": list(tag_ids)}},
         )
 
-    def metadata_scan(self, path):
-        """Targeted rescan so Stash associates a new caption file."""
+    def metadata_scan(self, paths):
+        """Targeted rescan so Stash associates new caption files.
+
+        Takes every path in one job: metadataScan is fire-and-forget, so a
+        job per scene leaves Stash walking the same directory once for each
+        file just written to it.
+        """
         self.execute(
             "mutation($i: ScanMetadataInput!) { metadataScan(input: $i) }",
-            {"i": {"paths": [path]}},
+            {"i": {"paths": list(paths)}},
         )
