@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 from . import __version__, captions, langs, outcomes, subtitles, tags
@@ -14,11 +15,17 @@ from .translate import Ollama
 
 log = logging.getLogger(__name__)
 
-# Directories awaiting a rescan are flushed at the end of the cycle, but a
-# queue can take hours, and a caption Stash has not been told about is
-# invisible until it is. This bounds that wait without going back to a job
-# per scene.
-SCAN_BATCH = 25
+# A directory is asked for as soon as the queue holds no more scenes in it,
+# which on a path-sorted queue is one job per directory. This is the backstop
+# for the directory holding most of the queue, whose scenes are finished with
+# long before it is: it caps how long a caption sits on disk unregistered, and
+# with it how often Stash walks a directory still being written into.
+#
+# The cap has to be a duration. A count of directories never reaches a
+# threshold, since a queue of thousands of scenes is usually a handful of
+# directories, and a count of scenes means little when they differ in cost by
+# two orders of magnitude.
+SCAN_INTERVAL = 600
 
 
 class Control:
@@ -362,6 +369,16 @@ class Worker:
             log.info("  source transcript kept as %s", salvage.name)
             return None, salvage_new, (outcomes.ERROR, f"translation failed: {e}")
 
+    @staticmethod
+    def parent_of(scene):
+        """The directory Stash keeps the scene's file in.
+
+        Stash's own path, not the mapped local one — this is what Stash is
+        told to go and look at.
+        """
+        files = scene.get("files") or []
+        return str(Path(files[0]["path"]).parent) if files else ""
+
     def flush_scans(self, pending):
         """Ask Stash to rescan the directories that gained a caption.
 
@@ -424,6 +441,12 @@ class Worker:
             if scenes:
                 log.info("queue: %d scene(s)", len(scenes))
             pending_scans = set()
+            # How many scenes each directory still has coming. Counted rather
+            # than inferred from the path changing between scenes: the sort is
+            # an optimisation Stash may refuse, and on an id-sorted queue the
+            # same directory comes back dozens of times.
+            remaining = Counter(self.parent_of(s) for s in scenes)
+            last_scan = time.monotonic()
             for i, scene in enumerate(scenes):
                 if self.control.stopping or self.control.paused:
                     break
@@ -437,16 +460,22 @@ class Worker:
                         f"FAILED scene {scene['id']}: {type(e).__name__}")
                 if cfg.run.dry_run:
                     continue
+                parent = self.parent_of(scene)
+                remaining[parent] -= 1
                 try:
                     self.swap_tags(scene, result.ok)
                     if result.needs_scan:
-                        # The Stash-side path, not the mapped local one.
-                        pending_scans.add(
-                            str(Path(scene["files"][0]["path"]).parent))
+                        pending_scans.add(parent)
                 except Exception as e:
                     log.error("  could not update tags: %s", e)
-                if len(pending_scans) >= SCAN_BATCH:
+                # Nothing more is coming for this directory, so it will not
+                # get a better moment than now. The interval covers the one
+                # that takes longer to finish than a caption can wait.
+                if pending_scans and (
+                        not remaining[parent]
+                        or time.monotonic() - last_scan >= SCAN_INTERVAL):
                     self.flush_scans(pending_scans)
+                    last_scan = time.monotonic()
 
             # Also covers breaking out of the loop for pause or stop, so a
             # written caption is never left unregistered.
