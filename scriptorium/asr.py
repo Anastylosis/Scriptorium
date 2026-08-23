@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 # Segments matching these are almost always Whisper hallucinating on non-speech.
 JUNK_PATTERNS = [
-    re.compile(p, re.I) for p in [
+    re.compile(p, re.IGNORECASE) for p in [
         r"^\s*subtitle[sd]?\s+by\b", r"^\s*subs?\s+by\b", r"\bamara\.org\b",
         r"^\s*thanks?\s+for\s+watching", r"^\s*thank\s+you\s+for\s+watching",
         r"^\s*please\s+subscribe", r"^\s*www\.", r"^\s*http", r"^\s*\[?music\]?\s*$",

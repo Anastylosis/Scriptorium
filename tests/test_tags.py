@@ -59,7 +59,7 @@ def test_three_letter_tags_are_normalised():
     # subs:en is always created at startup, so it is in the plan too; the
     # point here is that subs:por resolves to pt and subs:eng to en.
     _, plan = plan_for(["subs:eng", "subs:por"])
-    assert sorted(set(t.lang for t in plan.requests.values())) == ["en", "pt"]
+    assert sorted({t.lang for t in plan.requests.values()}) == ["en", "pt"]
 
 
 def test_two_tags_naming_one_language_are_transcribed_once():

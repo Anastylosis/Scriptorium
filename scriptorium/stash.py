@@ -81,8 +81,8 @@ class Client:
         """
         try:
             self.execute(
-                "query { findScenes(filter: {per_page: 1}) { scenes { %s } } }"
-                % CAPTION_FIELDS)
+                "query { findScenes(filter: {per_page: 1}) { scenes { "
+                + CAPTION_FIELDS + " } } }")
             self.supports_captions = True
         except StashError as e:
             self.supports_captions = False
@@ -95,13 +95,15 @@ class Client:
         fields = SCENE_FIELDS
         if self.supports_captions:
             fields += " " + CAPTION_FIELDS
+        # %-interpolated, not an f-string: GraphQL is all braces and every one
+        # of them would have to be doubled.
         data = self.execute(
             """query($ids: [ID!]) {
                  findScenes(
                    scene_filter: {tags: {value: $ids, modifier: INCLUDES, depth: 0}},
                    filter: {per_page: -1, sort: "id", direction: ASC}
                  ) { count scenes { %s } }
-               }""" % fields,
+               }""" % fields,  # noqa: UP031
             {"ids": list(tag_ids)},
         )
         return data["findScenes"]["scenes"]

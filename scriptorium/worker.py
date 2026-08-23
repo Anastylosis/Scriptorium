@@ -5,8 +5,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import captions, langs, outcomes, subtitles, tags
-from . import __version__
+from . import __version__, captions, langs, outcomes, subtitles, tags
 from .asr import Models, whisper_translates
 from .audio import probe_duration
 from .paths import PathMapper

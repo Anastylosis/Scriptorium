@@ -7,8 +7,8 @@ and `int("")` would otherwise crash at startup.
 """
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping
 
 
 class ConfigError(ValueError):

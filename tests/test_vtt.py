@@ -5,9 +5,8 @@ import pytest
 from scriptorium import config
 from scriptorium.subtitles import (
     MARKER,
-    Provenance,
     Path,
-    Provenance as P,
+    Provenance,
     dest_for,
     looks_generated,
     render,
@@ -117,8 +116,8 @@ def test_sidecar_can_be_enabled():
 
 
 def test_provenance_json_is_stable_and_sorted():
-    a = P(version="1", asr_model="m", date="d").as_json()
-    b = P(version="1", asr_model="m", date="d").as_json()
+    a = Provenance(version="1", asr_model="m", date="d").as_json()
+    b = Provenance(version="1", asr_model="m", date="d").as_json()
     assert a == b
     assert list(json.loads(a)) == sorted(json.loads(a))
 

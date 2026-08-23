@@ -102,16 +102,15 @@ def _decode_pyav(path, start, seconds):
         taken = 0
         for frame in container.decode(stream):
             # Seeking lands on a keyframe, which may be before the window.
-            if frame.pts is not None and stream.time_base:
-                if float(frame.pts * stream.time_base) < start - 1.0:
-                    continue
+            if (frame.pts is not None and stream.time_base
+                    and float(frame.pts * stream.time_base) < start - 1.0):
+                continue
             for chunk in _resample(resampler, frame):
                 out.append(chunk)
                 taken += chunk.size
             if taken >= want:
                 break
-        for chunk in _resample(resampler, None):
-            out.append(chunk)
+        out.extend(_resample(resampler, None))
     if not out:
         return np.zeros(0, dtype=np.float32)
     return np.concatenate(out)[:want].astype(np.float32, copy=False)
@@ -137,7 +136,7 @@ def _ffprobe_duration(path):
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=nw=1:nk=1", str(path)],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=120, check=False,
         )
         return float(out.stdout.strip())
     except Exception:

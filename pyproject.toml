@@ -10,3 +10,20 @@ requires-python = ">=3.12"
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
+# The rule set is ruff's default, which is not stable across releases: 0.16
+# widened it from four families to a curated ~300 rules, so the version bump
+# arrived as a red CI on code that had not changed. Tracking the default is
+# deliberate — it is the set upstream maintains and recommends — and the exact
+# pin in requirements-dev.txt is what keeps it from moving under us. A bump
+# that adds rules shows up as a Dependabot PR to look at, not a surprise.
+#
+# Selecting whole families instead would be far broader than the default, not
+# equal to it: `S` alone turns every assert in the suite into an error.
+ignore = [
+    # Nearly every one of these is a worker boundary that must degrade to
+    # subs:failed and keep draining the queue. Letting an unexpected exception
+    # out would take the process down over one bad file.
+    "BLE001",
+]
