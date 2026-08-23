@@ -23,6 +23,8 @@ class Client:
         # Assumed absent until probed: asking for a field this Stash does not
         # have fails the whole query, not just that field.
         self.supports_captions = False
+        # Dropped to "id" if this Stash rejects it; see find_tagged_scenes.
+        self.scene_sort = "path"
 
     def execute(self, query, variables=None):
         payload = json.dumps({"query": query, "variables": variables or {}}).encode()
@@ -91,6 +93,25 @@ class Client:
         return self.supports_captions
 
     def find_tagged_scenes(self, tag_ids):
+        """The queue, in path order.
+
+        Path order puts a directory's scenes next to each other so the worker
+        can tell it is finished with one and ask for the rescan then. It is
+        only an optimisation — nothing downstream depends on the order — and
+        sorting scenes by path is a join Stash has not always offered, so a
+        rejection drops to id order instead of failing the poll.
+        """
+        try:
+            return self._queue(tag_ids, self.scene_sort)
+        except StashError as e:
+            if self.scene_sort == "id":
+                raise
+            log.info("this Stash will not sort scenes by path (%s); using id "
+                     "order, which only spreads the rescans out", str(e)[:120])
+            self.scene_sort = "id"
+            return self._queue(tag_ids, self.scene_sort)
+
+    def _queue(self, tag_ids, sort):
         # depth 0 deliberately does not descend the tag hierarchy.
         fields = SCENE_FIELDS
         if self.supports_captions:
@@ -101,9 +122,9 @@ class Client:
             """query($ids: [ID!]) {
                  findScenes(
                    scene_filter: {tags: {value: $ids, modifier: INCLUDES, depth: 0}},
-                   filter: {per_page: -1, sort: "id", direction: ASC}
+                   filter: {per_page: -1, sort: "%s", direction: ASC}
                  ) { count scenes { %s } }
-               }""" % fields,  # noqa: UP031
+               }""" % (sort, fields),  # noqa: UP031
             {"ids": list(tag_ids)},
         )
         return data["findScenes"]["scenes"]

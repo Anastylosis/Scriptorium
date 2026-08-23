@@ -51,6 +51,13 @@ These cause silent failures, not errors:
 - `.srt` and `.vtt` only. A caption with no language suffix is filed as `"00"`
   and must never compare equal to a real code.
 - `metadataScan` is only needed for a **new** (language, extension) pair.
+- A caption attaches only when a scan **walks the subtitle file itself**.
+  `task_scan.go` rejects `.srt`/`.vtt` in the scan filter and calls
+  `AssociateCaptions` from that rejection branch; `scene.ScanHandler` only
+  *cleans* captions, it never attaches them. So a scan must be given the
+  **parent directory**. Scanning the video's own path — which is what the
+  per-scene Rescan button in the UI does — never reaches the sidecar and
+  silently does nothing.
 - An unknown GraphQL field fails the **whole query**. Anything
   schema-dependent needs a startup probe with a fallback — see
   `Client.probe_captions`.
@@ -69,6 +76,11 @@ These cause silent failures, not errors:
 - `condition_on_previous_text=False` and the temperature ladder are
   anti-hallucination measures.
 - `metadata_scan` takes the **Stash-side** path, not the mapped local one.
+- The rescan flush is keyed on **how many scenes a directory has left**,
+  not on the path changing between scenes. `sort: "path"` is an
+  optimisation the fallback drops, and on an id-sorted queue a directory
+  comes back dozens of times — flushing on every change is most of the way
+  back to a job per scene.
 - `start_http()` runs before tag setup and the model pull, so the page is up
   during a multi-gigabyte download.
 - The salvage write happens **before** the LLM call.
@@ -86,7 +98,7 @@ These cause silent failures, not errors:
 
 ## Testing
 
-274 tests, ~3s, no network or model downloads. Audio tests synthesise real
+293 tests, ~3s, no network or model downloads. Audio tests synthesise real
 media with PyAV; everything else uses fakes at the real seams.
 
 The suite has repeatedly passed while the thing was broken. **After changing

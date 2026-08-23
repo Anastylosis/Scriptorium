@@ -172,6 +172,11 @@ Stash is only asked to rescan when a genuinely new language lands. Replacing a
 caption it already knows about is picked up from disk on its own, so no scan is
 triggered for it.
 
+The ask is made as soon as the queue holds no more scenes in that directory —
+so a folder's subtitles show up when the worker moves off it, not at the end of
+a run that may take days — and at least every ten minutes for a directory big
+enough that the queue never leaves it.
+
 On a Stash too old to report captions the worker notices at startup, says so
 once, and falls back to checking the filesystem — everything still works, it
 just cannot spot equivalent spellings.
@@ -363,10 +368,19 @@ Test with `DRY_RUN=1` on two or three scenes before letting it loose.
 
 ## Troubleshooting
 
-**Captions don't appear after processing.** Stash has historically been finicky
-about detecting caption files added to already-scanned scenes. Run a manual scan
-of that directory from Settings → Tasks. Confirm the naming is exactly
-`scene.mp4` + `scene.en.srt` — same folder, same basename, two-letter code.
+**Captions don't appear after processing.** Stash attaches a caption only when
+a scan walks the *subtitle file itself*. It rejects `.srt` and `.vtt` as media
+and then associates them from that rejection branch, so the scan has to be
+pointed at a path whose walk reaches the sidecar.
+
+The per-scene **Rescan** button does not: it scans the video file's own path,
+the walk contains one `.mp4`, and the `.srt` beside it is never enumerated.
+Nothing is attached, and nothing is logged. Rescanning the scene as many times
+as you like will not change that.
+
+Scan the **directory** instead, from Settings → Tasks. Confirm the naming is
+exactly `scene.mp4` + `scene.en.srt` — same folder, same basename, bare
+two-letter code.
 
 **`Stash HTTP 401`.** Authentication is on. Generate an API key in Settings →
 Security and set `STASH_API_KEY`.

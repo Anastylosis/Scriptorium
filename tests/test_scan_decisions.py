@@ -1,6 +1,6 @@
 """When the real queue loop asks Stash to rescan."""
 
-from scriptorium import config, outcomes, status, tags
+from scriptorium import config, outcomes, status, tags, worker
 from scriptorium.worker import Worker
 
 
@@ -30,6 +30,12 @@ class Client:
         self.scans.append(list(paths))
 
 
+def written(new=True):
+    """A scene that produced one caption file."""
+    return outcomes.Scene(
+        targets=(outcomes.Target("en", outcomes.WRITTEN, new_caption=new),))
+
+
 def scene_with(*caps):
     return scene_at("1", "/data/clip.mp4", *caps)
 
@@ -56,7 +62,7 @@ def run_once(monkeypatch, scene, result, env=None):
 
 
 def test_a_new_language_asks_for_a_rescan(monkeypatch):
-    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)))
+    c = run_once(monkeypatch, scene_with(), written())
     assert c.scans == [["/data"]]
 
 
@@ -64,7 +70,7 @@ def test_rewriting_a_known_caption_does_not_rescan(monkeypatch):
     # Stash serves an already-registered caption straight from disk, so a
     # scan would only make it walk the directory for nothing.
     c = run_once(monkeypatch, scene_with(("en", "srt")),
-                 outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=False),)))
+                 written(new=False))
     assert c.scans == []
     assert c.updates[0][1] == ["d"], "still tagged done"
 
@@ -78,13 +84,13 @@ def test_a_failed_scene_is_tagged_failed_and_not_scanned(monkeypatch):
 def test_the_scan_uses_the_stash_side_path(monkeypatch):
     # The worker may see the file at a different path; Stash must be given
     # the path Stash itself reported.
-    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)),
+    c = run_once(monkeypatch, scene_with(), written(),
                  env={"PATH_FROM": "/data", "PATH_TO": "/mnt/media"})
     assert c.scans == [["/data"]]
 
 
 def test_dry_run_touches_nothing(monkeypatch):
-    c = run_once(monkeypatch, scene_with(), outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)),
+    c = run_once(monkeypatch, scene_with(), written(),
                  env={"DRY_RUN": "1"})
     assert c.scans == []
     assert c.updates == []
@@ -120,23 +126,50 @@ def run_batch(monkeypatch, scenes, result, env=None):
     return client
 
 
-def test_one_scan_covers_every_directory_in_the_batch(monkeypatch):
+def test_a_directory_is_only_named_once(monkeypatch):
     # A job per scene had Stash walking the same directory once per caption
     # written into it, which is what kept a scan running against the database
     # the worker was still writing to.
     c = run_batch(monkeypatch,
                   [scene_at("1", "/data/a/one.mp4"),
-                   scene_at("2", "/data/b/two.mp4")],
-                  outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)))
-    assert c.scans == [["/data/a", "/data/b"]]
+                   scene_at("2", "/data/a/two.mp4")],
+                  written())
+    assert c.scans == [["/data/a"]]
 
 
-def test_a_directory_is_only_named_once(monkeypatch):
+def test_a_directory_is_asked_for_as_soon_as_the_queue_leaves_it(monkeypatch):
+    # Waiting for the end of the cycle is what left a written caption
+    # invisible for days: nothing more is coming for /data/a once its last
+    # scene is done, so there is no better moment than that one.
     c = run_batch(monkeypatch,
                   [scene_at("1", "/data/a/one.mp4"),
-                   scene_at("2", "/data/a/two.mp4")],
-                  outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),)))
-    assert c.scans == [["/data/a"]]
+                   scene_at("2", "/data/a/two.mp4"),
+                   scene_at("3", "/data/b/three.mp4")],
+                  written())
+    assert c.scans == [["/data/a"], ["/data/b"]]
+
+
+def test_a_directory_the_queue_returns_to_is_asked_for_again(monkeypatch):
+    # Path order is an optimisation Stash can refuse, so the queue may leave a
+    # directory and come back. Finishing is a count of what is left, not the
+    # path changing: on an id-sorted queue that happens hundreds of times.
+    c = run_batch(monkeypatch,
+                  [scene_at("1", "/data/a/one.mp4"),
+                   scene_at("2", "/data/b/two.mp4"),
+                   scene_at("3", "/data/a/three.mp4")],
+                  written())
+    assert c.scans == [["/data/a", "/data/b"], ["/data/a"]]
+
+
+def test_the_interval_bounds_a_directory_the_queue_never_leaves(monkeypatch):
+    # One directory can hold a third of the queue. Its scenes are done long
+    # before the directory is, and the caption for each is on disk and
+    # unreachable until Stash is told, so the wait has to be capped.
+    monkeypatch.setattr(worker, "SCAN_INTERVAL", 0)
+    c = run_batch(monkeypatch,
+                  [scene_at(str(i), f"/data/a/{i}.mp4") for i in range(3)],
+                  written())
+    assert c.scans == [["/data/a"], ["/data/a"], ["/data/a"]]
 
 
 def test_the_batch_is_flushed_when_the_queue_is_abandoned(monkeypatch):
@@ -152,7 +185,7 @@ def test_the_batch_is_flushed_when_the_queue_is_abandoned(monkeypatch):
 
     def one_then_pause(scene):
         w.control.pause()
-        return outcomes.Scene(targets=(outcomes.Target('en', outcomes.WRITTEN, new_caption=True),))
+        return written()
 
     monkeypatch.setattr(w, "process_scene", one_then_pause)
     w.run()
