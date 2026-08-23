@@ -39,7 +39,7 @@ MAX_OVERSHOOT = 10.0
 
 def ts(seconds: float, decimal: str = ",") -> str:
     """SRT separates milliseconds with a comma, WebVTT with a dot."""
-    ms = max(0, int(round(seconds * 1000)))
+    ms = max(0, round(seconds * 1000))
     h, ms = divmod(ms, 3600000)
     m, ms = divmod(ms, 60000)
     s, ms = divmod(ms, 1000)
