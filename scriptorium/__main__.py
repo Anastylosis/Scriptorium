@@ -12,7 +12,7 @@ def main(argv=None):
     try:
         cfg = config.from_env()
     except config.ConfigError as e:
-        logging.error("configuration error: %s", e)
+        log.error("configuration error: %s", e)
         return 2
 
     store = status.Store()
