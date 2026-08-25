@@ -59,50 +59,136 @@ class Store:
             return snap
 
 
+# The page is one ruled leaf, not a stack of cards: a continuous margin rule
+# with labels hanging in the margin and the record in the text block. Colour is
+# two inks with jobs rather than two brand accents — lapis is the machine's own
+# voice (state, structure, links), rubric is reserved for the one thing the
+# operator must not miss (the write head, the target in hand, a failure).
+#
+# No webfont. The page hard-refreshes every 5s, so a blocking request to a font
+# host would stall every one of those on a box with no route out.
+CSS = """
+  :root {
+    --ink:#131A22; --vellum:#E8E2D6; --faded:#7C8894;
+    --rule:#232E39; --ruling:#2E3B49; --rubric:#C8443A; --lapis:#6E93C8; --amber:#C9A25E;
+    --serif:Palatino,"Palatino Linotype","Iowan Old Style","Book Antiqua",
+            "TeX Gyre Pagella","URW Palladio L",P052,Georgia,serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono","JetBrains Mono",Menlo,
+           Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ink); color:var(--vellum); margin:0;
+         font:13px/1.6 var(--mono); -webkit-font-smoothing:antialiased; }
+  .leaf { max-width:940px; margin:0 auto; padding:40px 24px 72px; }
+  a { color:var(--lapis); text-decoration:none;
+      border-bottom:1px solid rgba(110,147,200,.3); }
+  a:hover { border-bottom-color:var(--lapis); }
+  :focus-visible { outline:2px solid var(--lapis); outline-offset:3px; }
+
+  /* masthead */
+  .masthead { display:flex; align-items:baseline; justify-content:space-between;
+              gap:16px; padding-bottom:14px; border-bottom:1px solid var(--rule); }
+  h1 { font:400 25px/1 var(--serif); letter-spacing:.055em; margin:0; }
+  .ver { color:var(--faded); font-size:11.5px; letter-spacing:.1em;
+         text-transform:uppercase; margin:0; }
+
+  /* the ruled grid: marginalia | text block */
+  .row { display:grid; grid-template-columns:128px 1fr; }
+  .margin { text-align:right; padding:26px 22px 0 0; }
+  .label { font:italic 400 14px/1.3 var(--serif); color:var(--faded);
+           letter-spacing:.01em; }
+  .block { border-left:1px solid var(--rule); padding:26px 0 30px 24px;
+           min-width:0; }
+  .row + .row .block { border-top:1px solid var(--rule); }
+
+  /* what it is doing */
+  .state { font-size:11.5px; letter-spacing:.19em; text-transform:uppercase; }
+  .state-working { color:var(--lapis); }
+  .state-idle    { color:var(--faded); }
+  .state-paused, .state-starting { color:var(--amber); }
+  .state-error   { color:var(--rubric); }
+  .work { font:400 27px/1.25 var(--serif); color:var(--vellum);
+          margin:9px 0 5px; overflow-wrap:anywhere; }
+  .meta { color:var(--faded); font-size:12px; margin:0; overflow-wrap:anywhere; }
+
+  /* the signature: a line being written. Inked behind the nib, ruled ahead. */
+  .writing { display:flex; align-items:center; gap:14px; margin:24px 0 9px; }
+  .tc { color:var(--vellum); font-size:12.5px; font-variant-numeric:tabular-nums;
+        flex:none; }
+  .ruling { position:relative; flex:1 1 auto; height:1px; background:var(--ruling); }
+  .inked { position:absolute; left:0; top:0; height:1px; background:var(--vellum);
+           transition:width .5s ease; }
+  .nib { position:absolute; right:0; top:-6px; width:2px; height:13px;
+         background:var(--rubric); }
+  /* Period divides the 5s refresh, so a reload lands on the same phase. */
+  @keyframes breathe { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+  .nib { animation:breathe 2.5s ease-in-out infinite; }
+
+  /* facts */
+  .facts { display:grid; grid-template-columns:auto 1fr; gap:7px 18px;
+           margin:20px 0 0; }
+  .facts dt { color:var(--faded); font-size:11.5px; letter-spacing:.11em;
+              text-transform:uppercase; padding-top:2px; }
+  .facts dd { margin:0; color:var(--vellum); }
+  .tally { font:400 18px/1 var(--serif); }
+  .lang { color:var(--faded); }
+  .lang-now { color:var(--rubric); }
+
+  /* controls */
+  .controls { display:flex; flex-wrap:wrap; gap:9px; margin-top:26px; }
+  form { display:contents; }
+  button { background:none; color:var(--vellum); border:1px solid var(--rule);
+           padding:7px 15px; font:inherit; font-size:11.5px; letter-spacing:.11em;
+           text-transform:uppercase; cursor:pointer; transition:border-color .18s; }
+  button:hover { border-color:var(--faded); }
+  .note { color:var(--lapis); font-size:12px; margin:14px 0 0; }
+
+  /* finished */
+  .ledger { list-style:none; margin:0; padding:0; }
+  .ledger li { display:grid; grid-template-columns:52px 1fr auto; gap:16px;
+               padding:5px 0; border-bottom:1px solid var(--rule); }
+  .ledger li:last-child { border-bottom:0; }
+  .ledger time { color:var(--faded); font-variant-numeric:tabular-nums; }
+  .what { color:var(--vellum); overflow-wrap:anywhere; }
+  .count { color:var(--faded); white-space:nowrap; }
+  .failed .what { color:var(--rubric); }
+
+  /* log — reversed flex pins the scroll to the newest line without script */
+  .logwrap { display:flex; flex-direction:column-reverse; overflow:auto;
+             max-height:420px; }
+  pre { margin:0; color:var(--faded); font-size:12px; line-height:1.65;
+        white-space:pre-wrap; overflow-wrap:anywhere; }
+
+  footer { color:var(--faded); font-size:11.5px; margin-top:32px;
+           padding-top:14px; border-top:1px solid var(--rule); }
+
+  @media (max-width:640px) {
+    .leaf { padding:28px 18px 56px; }
+    .row { grid-template-columns:1fr; }
+    .margin { text-align:left; padding:22px 0 0; }
+    .block { border-left:0; padding:6px 0 24px; }
+    .row + .row .block { border-top:0; }
+    .row + .row .margin { border-top:1px solid var(--rule); }
+    .work { font-size:23px; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    * { animation:none !important; transition:none !important; }
+  }
+"""
+
 PAGE = """<!doctype html>
-<html><head><meta charset="utf-8"><title>Scriptorium</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scriptorium</title>
 <meta http-equiv="refresh" content="5">
-<style>
-  body {{ background:#16181d; color:#d6d9de; margin:0;
-         font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }}
-  .wrap {{ max-width:900px; margin:0 auto; padding:28px 20px 60px; }}
-  h1 {{ font-size:15px; letter-spacing:.14em; text-transform:uppercase;
-        color:#7d838d; font-weight:600; margin:0 0 22px; }}
-  .card {{ background:#1d2027; border:1px solid #2b2f38; border-radius:8px;
-           padding:18px 20px; margin-bottom:16px; }}
-  .badge {{ display:inline-block; padding:2px 10px; border-radius:11px;
-            font-size:11px; letter-spacing:.09em; text-transform:uppercase; }}
-  .working {{ background:#1e3a5f; color:#7cb8ff; }}
-  .idle    {{ background:#2b2f38; color:#8a919c; }}
-  .paused  {{ background:#3a3320; color:#d7b471; }}
-  .error   {{ background:#4a2020; color:#ff9c9c; }}
-  .starting{{ background:#3d3517; color:#e0c060; }}
-  .title {{ font-size:16px; color:#f0f2f5; margin:12px 0 4px; word-break:break-all; }}
-  .meta {{ color:#7d838d; font-size:12.5px; }}
-  .bar {{ height:7px; background:#2b2f38; border-radius:4px;
-          overflow:hidden; margin:16px 0 7px; }}
-  .fill {{ height:100%; background:linear-gradient(90deg,#3b7dd8,#5aa0f0);
-           transition:width .4s; }}
-  table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-  td {{ padding:4px 0; border-bottom:1px solid #24272f; }}
-  td:first-child {{ color:#7d838d; width:150px; }}
-  pre {{ background:#12141a; border:1px solid #2b2f38; border-radius:6px;
-         padding:14px; overflow-x:auto; font-size:12.5px; color:#aab0ba;
-         max-height:400px; margin:0; }}
-  h2 {{ font-size:12px; letter-spacing:.12em; text-transform:uppercase;
-        color:#7d838d; margin:0 0 10px; }}
-  form {{ display:inline; }}
-  button {{ background:#2b2f38; color:#d6d9de; border:1px solid #3a3f4a;
-            border-radius:6px; padding:6px 14px; font:inherit; font-size:12.5px;
-            cursor:pointer; margin-right:8px; }}
-  button:hover {{ background:#343945; }}
-  .note {{ color:#7cb8ff; font-size:12.5px; margin-top:10px; }}
-</style></head><body><div class="wrap">
-<h1>Scriptorium</h1>
+<style>{css}</style></head><body>
+<div class="leaf">
+<header class="masthead"><h1>Scriptorium</h1><p class="ver">{version}</p></header>
 {body}
-<div class="card"><h2>Log</h2><pre>{logs}</pre></div>
-<p class="meta"><a href="https://github.com/Anastylosis/Scriptorium">Scriptorium</a>
-{version} &middot; auto-refreshes every 5s &middot; uptime {uptime}</p>
+<div class="row"><div class="margin"><span class="label">log</span></div>
+<div class="block"><div class="logwrap"><pre>{logs}</pre></div></div></div>
+<footer>Refreshes every 5s &middot; up {uptime} &middot;
+<a href="https://github.com/Anastylosis/Scriptorium">github.com/Anastylosis/Scriptorium</a></footer>
 </div></body></html>"""
 
 
@@ -113,72 +199,125 @@ def fmt_hms(seconds):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+def _row(label, block):
+    return (f'<div class="row"><div class="margin">'
+            f'<span class="label">{label}</span></div>'
+            f'<div class="block">{block}</div></div>')
+
+
+def _writing_line(position, duration, pct):
+    """The progress indicator: inked behind the write head, ruled ahead of it."""
+    return (f'<div class="writing">'
+            f'<span class="tc">{fmt_hms(position)}</span>'
+            f'<span class="ruling"><span class="inked" style="width:{pct:.1f}%">'
+            f'<i class="nib"></i></span></span>'
+            f'<span class="tc">{fmt_hms(duration)}</span></div>')
+
+
+def _working(st):
+    pct = (st["position"] / st["duration"] * 100) if st["duration"] else 0
+    pct = max(0, min(100, pct))
+    elapsed = time.time() - (st["started_scene"] or time.time())
+    eta = (elapsed / pct * (100 - pct)) if pct > 2 else 0
+    speed = (st["position"] / elapsed) if elapsed > 0 else 0
+
+    left = f' &middot; {fmt_hms(eta)} left' if eta else ''
+    out = ['<div class="state state-working">working</div>']
+    out.append(f'<h2 class="work">{html.escape(st["scene"])}</h2>')
+    out.append(f'<p class="meta">scene {html.escape(str(st["scene_id"]))}'
+               f' &middot; {html.escape(st["stage"] or "")}</p>')
+    out.append(_writing_line(st["position"], st["duration"], pct))
+    out.append(f'<p class="meta">{pct:.0f}% &middot; {speed:.1f}&times;'
+               f' realtime{left}</p>')
+    out.append('<dl class="facts">')
+    if st["source_lang"]:
+        conf = (f' <span class="lang">{st["lang_confidence"]:.0%} confident</span>'
+                if st["lang_confidence"] else '')
+        out.append(f'<dt>heard</dt><dd>{html.escape(st["source_lang"])}{conf}</dd>')
+    if st["targets"]:
+        # The language in hand is rubricated: it is the one fact here that
+        # changes while you are looking at the page.
+        marks = " ".join(
+            f'<span class="{"lang-now" if t == st["target"] else "lang"}">'
+            f'{html.escape(t)}</span>'
+            for t in st["targets"])
+        out.append(f'<dt>writing</dt><dd>{marks}</dd>')
+    out.append(f'<dt>waiting</dt><dd><span class="tally">{st["queue"]}</span> '
+               f'{"scene" if st["queue"] == 1 else "scenes"}</dd>')
+    out.append('</dl>')
+    return out
+
+
+def _resting(st, status):
+    queue = st["queue"]
+    names = st.get("request_tags") or ["subs:en"]
+    tags = html.escape(", ".join(names))
+    if len(names) > 1:
+        tags = f"one of {tags}"
+
+    if queue:
+        head = (f'<h2 class="work"><span class="tally">{queue}</span> '
+                f'{"scene" if queue == 1 else "scenes"} waiting</h2>')
+    else:
+        head = '<h2 class="work">Nothing waiting</h2>'
+
+    # A paused worker does not start on the next poll, so it may not say so.
+    if status == "paused":
+        note = "Nothing starts until you resume."
+    else:
+        note = ("Work starts on the next poll." if queue else
+                f"Tag a scene in Stash with {tags} and it will be picked up.")
+        nxt = st.get("next_poll")
+        if nxt:
+            note += f" Next poll in {max(0, int(nxt - time.time()))}s."
+    return [f'<div class="state state-{status}">{status}</div>', head,
+            f'<p class="meta">{note}</p>']
+
+
+def _controls(paused):
+    swap = ('<form method="post" action="/resume"><button>Resume</button></form>'
+            if paused else
+            '<form method="post" action="/pause"><button>Pause</button></form>')
+    return ('<div class="controls">'
+            '<form method="post" action="/poll"><button>Poll now</button></form>'
+            + swap + '</div>')
+
+
+def _ledger(entries):
+    rows = []
+    for c in reversed(entries):
+        what = c["what"]
+        # write() emits "name.en.srt — 412 cues"; the run loop emits a bare
+        # FAILED line. Both land here, and only one of them is good news.
+        name, _, count = what.partition(" — ")
+        failed = ' class="failed"' if what.startswith("FAILED") else ''
+        rows.append(
+            f'<li{failed}><time>{time.strftime("%H:%M", time.localtime(c["at"]))}'
+            f'</time><span class="what">{html.escape(name)}</span>'
+            f'<span class="count">{html.escape(count)}</span></li>')
+    return f'<ol class="ledger">{"".join(rows)}</ol>'
+
+
 def render(store, ring, paused=False):
     st = store.snapshot()
-    logs = "\n".join(ring.lines())
     status = st["status"]
-    parts = [f'<div class="card"><span class="badge {status}">{status}</span>']
 
     if status == "working" and st["scene"]:
-        pct = (st["position"] / st["duration"] * 100) if st["duration"] else 0
-        pct = max(0, min(100, pct))
-        elapsed = time.time() - (st["started_scene"] or time.time())
-        eta = (elapsed / pct * (100 - pct)) if pct > 2 else 0
-        speed = (st["position"] / elapsed) if elapsed > 0 else 0
-        parts.append(f'<div class="title">{html.escape(st["scene"])}</div>')
-        parts.append(
-            f'<div class="meta">scene {st["scene_id"]} &middot; '
-            f'{html.escape(st["stage"] or "")}</div>'
-        )
-        parts.append(f'<div class="bar"><div class="fill" style="width:{pct:.1f}%"></div></div>')
-        parts.append(
-            f'<div class="meta">{pct:.0f}% &middot; '
-            f'{fmt_hms(st["position"])} / {fmt_hms(st["duration"])} &middot; '
-            f'{speed:.1f}x realtime'
-            + (f' &middot; ~{fmt_hms(eta)} left' if eta else '')
-            + '</div>'
-        )
-        parts.append('<table>')
-        if st["source_lang"]:
-            conf = f' ({st["lang_confidence"]:.0%})' if st["lang_confidence"] else ''
-            parts.append(f'<tr><td>source language</td><td>{st["source_lang"]}{conf}</td></tr>')
-        if st["targets"]:
-            parts.append(f'<tr><td>producing</td><td>{", ".join(st["targets"])}</td></tr>')
-        parts.append(f'<tr><td>queue</td><td>{st["queue"]} waiting</td></tr>')
-        parts.append('</table>')
+        block = _working(st)
     else:
-        nxt = st.get("next_poll")
-        wait = f' &middot; next poll in {max(0, int(nxt - time.time()))}s' if nxt else ''
-        tags = ", ".join(st.get("request_tags") or []) or "subs:en"
-        parts.append(
-            f'<div class="title">{st["queue"]} scene(s) queued</div>'
-            f'<div class="meta">Tag scenes in Stash with {html.escape(tags)} '
-            f'to add work{wait}</div>'
-        )
-
-    parts.append(
-        '<div style="margin-top:16px">'
-        '<form method="post" action="/poll"><button>Poll now</button></form>'
-        + ('<form method="post" action="/resume"><button>Resume</button></form>'
-           if paused else
-           '<form method="post" action="/pause"><button>Pause</button></form>')
-        + '</div>'
-    )
+        block = _resting(st, status)
+    block.append(_controls(paused))
     if st.get("poll_note"):
-        parts.append(f'<div class="note">{html.escape(st["poll_note"])}</div>')
-    parts.append('</div>')
+        block.append(f'<p class="note">{html.escape(st["poll_note"])}</p>')
 
+    body = _row("state", "".join(block))
     if st["completed"]:
-        rows = "".join(
-            f'<tr><td>{time.strftime("%H:%M", time.localtime(c["at"]))}</td>'
-            f'<td>{html.escape(c["what"])}</td></tr>'
-            for c in reversed(st["completed"])
-        )
-        parts.append(f'<div class="card"><h2>Recently finished</h2><table>{rows}</table></div>')
+        body += _row("finished", _ledger(st["completed"]))
 
     return PAGE.format(
-        body="".join(parts),
-        logs=html.escape(logs) or "(nothing yet)",
+        css=CSS,
+        body=body,
+        logs=html.escape("\n".join(ring.lines())) or "(nothing yet)",
         uptime=fmt_hms(time.time() - st["started"]),
         version=html.escape(__version__),
     )
