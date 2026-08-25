@@ -179,7 +179,17 @@ class Worker:
         src, prob = self.models.detect_language(local, duration)
         log.info("  source language: %s (%.0f%% confident), %.0f min",
                  src, prob * 100, duration / 60)
-        self.store.update(source_lang=src, lang_confidence=prob)
+        # `auto` is a request, not a language. Until the detector has run the
+        # page can only name the request; after it, it should say what is
+        # actually being produced, and the language in hand is matched against
+        # this list to be marked.
+        resolved = []
+        for t in wanted:
+            lang = src if t == tags.AUTO else t
+            if lang not in resolved:
+                resolved.append(lang)
+        self.store.update(source_lang=src, lang_confidence=prob,
+                          targets=resolved)
 
         cache = {}
         self._written = set()
