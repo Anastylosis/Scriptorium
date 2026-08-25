@@ -13,24 +13,20 @@ permissions:
   contents: read
 
 jobs:
-  # Local, because it is genuinely specific to this project: the version is
-  # baked into every generated subtitle's provenance and shown on the status
-  # page, so a stale one mislabels output that outlives the container. It has
-  # silently drifted twice. A test comparing pyproject.toml with __init__.py
-  # cannot catch it — both go stale together — so the tag is the referee.
+  # The tag is the version: it is passed into the build and stamped into
+  # every subtitle's provenance, so a tag that is not a version does not fail,
+  # it ships an image labelled 0.8 whose output claims 0.0.0. Checking the
+  # shape is all that is left to check — there is no second copy to disagree
+  # with, which is what the old pyproject.toml comparison was guarding and
+  # what made a bump necessary before every release.
   version:
-    name: Check the tag matches the declared version
+    name: Check the tag is a version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7.0.1
-
       - run: |
-          tag="${GITHUB_REF#refs/tags/v}"
-          declared=$(python3 -c "import tomllib,pathlib; \
-            print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
-          echo "tag=${tag} declared=${declared}"
-          if [ "$tag" != "$declared" ]; then
-            echo "::error::tag v${tag} does not match version ${declared} in pyproject.toml"
+          tag="${GITHUB_REF#refs/tags/}"
+          if ! printf '%s' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag ${tag} is not vX.Y.Z, so the image would ship a 0.0.0 provenance version"
             exit 1
           fi
 
@@ -46,10 +42,10 @@ jobs:
       attestations: write
     with:
       mode: release
-      # No go.mod to read a toolchain from, and the Dockerfile declares no
-      # VERSION/COMMIT/DATE build args.
+      # No go.mod to read a toolchain from. VERSION is what carries the tag
+      # into the image; the Dockerfile declares it.
       go-version-build-arg: false
-      version-build-args: false
+      version-build-args: true
 
   # go-release.yml does not fit here: it runs `go test` and builds Go
   # binaries, and this project ships an image rather than executables. The

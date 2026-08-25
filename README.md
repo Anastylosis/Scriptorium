@@ -192,6 +192,9 @@ confidence, how many scenes are still queued, recently written files, and the
 last 200 log lines.
 
 The running version is in the page footer, and in `/json` as `version`.
+Only released images report a real number; a `master` or `sha-` image
+reports `0.0.0`, because it was not built from a version tag and its
+output should not claim one. The image tag says which build it is.
 
 `http://<host>:8088/json` returns the same state as JSON if you'd rather
 poll it from somewhere else.
