@@ -82,6 +82,8 @@ class Worker:
         self.ollama = Ollama(cfg.ollama)
         self.discover, self._discover_note = tags.discovery_enabled(cfg.tags)
         self.plan = tags.Plan()
+        # Destinations already produced for the scene in hand; see write().
+        self._written = set()
 
     # -- setup ------------------------------------------------------------
 
@@ -180,6 +182,7 @@ class Worker:
         self.store.update(source_lang=src, lang_confidence=prob)
 
         cache = {}
+        self._written = set()
         produced = tuple(self.produce(local, scene, src, t, cache, duration)
                          for t in wanted)
         result = outcomes.Scene(targets=produced)
@@ -271,6 +274,14 @@ class Worker:
 
         The marker is applied here rather than upstream so it can never be
         handed to the translator: translate() only ever sees transcribed cues.
+
+        A destination already written for this scene is left alone. The
+        source-language transcript has two claims on it — the salvage write
+        that guards the LLM call, and `subs:<src>` asked for as a target in
+        its own right — and whichever runs second was rewriting the first
+        one's bytes: same cached cues, same provenance (dated, not stamped),
+        one more line in the log and one more row on the status page for a
+        file that had not changed.
         """
         cfg = self.cfg
         prov = self.provenance(src, lang, mt_model)
@@ -285,8 +296,11 @@ class Worker:
         note = prov.as_json(cues=len(cues))
         for fmt in cfg.output.formats:
             dest = subtitles.dest_for(local, lang, fmt)
+            if dest in self._written:
+                continue
             subtitles.write_text(
                 subtitles.render(annotated, fmt=fmt, note=note), dest)
+            self._written.add(dest)
             log.info("  wrote %s (%d cues)", dest.name, len(cues))
             self.store.add_completed(f"{dest.name} — {len(cues)} cues")
             if cfg.annotate.sidecar:

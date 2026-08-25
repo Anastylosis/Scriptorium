@@ -84,6 +84,10 @@ These cause silent failures, not errors:
 - `start_http()` runs before tag setup and the model pull, so the page is up
   during a multi-gigabyte download.
 - The salvage write happens **before** the LLM call.
+- `write()` keeps a per-scene record of destinations. The salvage write
+  and `subs:<src>` as a target both claim the source-language file; the
+  **second** one is dropped. Dropping the salvage instead would lose the
+  transcript when the LLM dies and the source is not itself a target.
 - The annotation is applied **inside the writer** — that is what guarantees
   the translator can never be handed the marker.
 - Request tags are matched by **id** against the plan the query used. Matching
@@ -98,7 +102,7 @@ These cause silent failures, not errors:
 
 ## Testing
 
-293 tests, ~3s, no network or model downloads. Audio tests synthesise real
+298 tests, ~3s, no network or model downloads. Audio tests synthesise real
 media with PyAV; everything else uses fakes at the real seams.
 
 The suite has repeatedly passed while the thing was broken. **After changing
