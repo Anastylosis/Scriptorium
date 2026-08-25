@@ -56,6 +56,7 @@ def run(tmp_path, tag_ids, env=None):
     w.plan = tags.Plan(requests={
         "t-en": tags.RequestTag("t-en", "subs:en", "en"),
         "t-ja": tags.RequestTag("t-ja", "subs:ja", "ja"),
+        "t-auto": tags.RequestTag("t-auto", "subs:auto", tags.AUTO),
     })
     result = w.process_scene(scene(video, tag_ids))
     rows = [c["what"] for c in w.store.snapshot()["completed"]]
@@ -105,3 +106,17 @@ def test_the_next_scene_writes_its_own_copy(tmp_path):
     assert (tmp_path / "other.ja.srt").exists()
     rows = [c["what"] for c in w.store.snapshot()["completed"]]
     assert rows == ["clip.ja.srt — 2 cues", "other.ja.srt — 2 cues"]
+
+
+def test_an_auto_target_is_named_by_the_language_it_resolved_to(tmp_path):
+    # The status page was printing the literal string "auto" where a language
+    # belongs, and could never mark the one in hand: `target` holds the
+    # resolved code, so it matched nothing in the list beside it.
+    w, _, _ = run(tmp_path, ["t-auto"])
+    assert w.store.snapshot()["targets"] == ["ja"]
+
+
+def test_a_language_asked_for_twice_is_only_named_once(tmp_path):
+    # subs:ja and subs:auto on Japanese audio are the same request.
+    w, _, _ = run(tmp_path, ["t-ja", "t-auto"])
+    assert w.store.snapshot()["targets"] == ["ja"]
