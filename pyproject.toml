@@ -1,6 +1,10 @@
 [project]
 name = "scriptorium"
-version = "0.7.2"
+# Not the source of truth, and deliberately never a real number: the
+# release build takes the version from the git tag (scriptorium/__init__.py).
+# Kept because [project] requires the field, pinned at 0.0.0 so it cannot
+# quietly disagree with a release the way the old hand-bumped pair did.
+version = "0.0.0"
 description = "Tag-driven subtitle generation for Stash"
 license = "GPL-3.0-only"
 # Declared so Dependabot does not propose bumps that need a newer

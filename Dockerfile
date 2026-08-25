@@ -3,6 +3,16 @@ ARG PYTHON_VERSION=3.12
 
 FROM python:${PYTHON_VERSION}-slim
 
+# The release build passes the git tag here; a dev build sends the branch
+# name and a local `make image` sends nothing, both of which __init__.py
+# resolves to 0.0.0 rather than a stale release number. COMMIT and DATE are
+# declared but unused: the shared publish workflow sends all three together,
+# and an undeclared build arg is a build warning. metadata-action already
+# puts both into the image labels.
+ARG VERSION=""
+ARG COMMIT=""
+ARG DATE=""
+
 LABEL org.opencontainers.image.title="Scriptorium" \
       org.opencontainers.image.description="Tag-driven subtitle generation for Stash" \
       org.opencontainers.image.source="https://github.com/Anastylosis/Scriptorium" \
@@ -16,7 +26,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # OMP_NUM_THREADS: CTranslate2 oversubscribes otherwise; the worker sets cpu_threads itself.
 # HF_HOME lives under /models so tokenizer downloads survive container recreation.
-ENV PYTHONUNBUFFERED=1 \
+ENV SCRIPTORIUM_VERSION=${VERSION} \
+    PYTHONUNBUFFERED=1 \
     OMP_NUM_THREADS=1 \
     HF_HUB_DISABLE_TELEMETRY=1 \
     HF_HOME=/models/hf \

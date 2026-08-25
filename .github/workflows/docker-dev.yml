@@ -34,7 +34,9 @@ jobs:
       attestations: write
     with:
       mode: dev
-      # Python: there is no go.mod to read a toolchain version from, and the
-      # Dockerfile declares no VERSION/COMMIT/DATE build args.
+      # Python: there is no go.mod to read a toolchain version from. VERSION
+      # is sent so a dev image reports 0.0.0 instead of inheriting whatever
+      # number the last release left in the source — dev builds send a branch
+      # name, which __init__.py refuses.
       go-version-build-arg: false
-      version-build-args: false
+      version-build-args: true

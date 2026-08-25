@@ -102,7 +102,7 @@ These cause silent failures, not errors:
 
 ## Testing
 
-339 tests, ~6s, no network or model downloads. Audio tests synthesise real
+351 tests, ~7s, no network or model downloads. Audio tests synthesise real
 media with PyAV; everything else uses fakes at the real seams.
 
 The suite has repeatedly passed while the thing was broken. **After changing
@@ -143,10 +143,18 @@ to maintain here, unlike the marker.
 
 ## Releasing
 
-Bump `pyproject.toml` **and** `scriptorium/__init__.py`, then tag `vX.Y.Z`.
-`release.yml` refuses a tag that disagrees with the declared version — the
-version is baked into every subtitle's provenance, so a stale one mislabels
-files that outlive the container.
+Tag `vX.Y.Z`. That is the whole procedure — there is no version to bump.
+
+The tag reaches the image as the `VERSION` build arg, the Dockerfile turns it
+into `SCRIPTORIUM_VERSION`, and `__init__._resolve()` accepts it only if it
+looks like a version. `release.yml` checks the tag's shape before building,
+because a tag that is not `vX.Y.Z` would not fail anything — it would publish
+an image tagged `0.8` whose subtitles all claim `0.0.0`.
+
+Anything with no release tag behind it reports `0.0.0`: dev images, a local
+`make image`, the suite. That is deliberate. The version is baked into every
+subtitle's provenance and outlives the container, and a dev image used to
+stamp whatever number the last release had left in the source.
 
 `docker/metadata-action` strips the `v`: git tag `v0.7.1`, image tag `0.7.1`.
 Release notes must use `steps.meta.outputs.version`, not `github.ref_name`.
