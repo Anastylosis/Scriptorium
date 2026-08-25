@@ -44,10 +44,6 @@ class Store:
         with self._lock:
             self._state.update(kw)
 
-    def get(self, key, default=None):
-        with self._lock:
-            return self._state.get(key, default)
-
     def add_completed(self, what):
         with self._lock:
             self._completed.append({"at": time.time(), "what": what})
