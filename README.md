@@ -27,8 +27,30 @@ the two backends that exist today.
 
 ## Install
 
-Copy `docker-compose.example.yml` to `docker-compose.yml`, point the first
-volume at your video library, and start it:
+To see it work, one command — point it at a folder of videos and watch the
+status page while it goes:
+
+```sh
+docker run --rm -p 8088:8088 \
+  -v /path/to/your/videos:/media \
+  -v scriptorium-models:/models \
+  -v scriptorium-state:/state \
+  -e WATCH_DIRS=/media -e RUN_ONCE=1 \
+  ghcr.io/anastylosis/scriptorium:latest
+```
+
+That transcribes whatever is spoken in each file, writes the subtitle beside
+it, and exits. The first run downloads the model — about 1.6 GB for the
+default `large-v3-turbo` — into the `scriptorium-models` volume, so it is
+paid for once. After that, expect roughly 5–10× realtime on a modern CPU: a
+40-minute scene in 4–8 minutes, using about 2 GB of RAM. Drop `RUN_ONCE=1`
+to leave it watching, and see
+[Without Stash](#without-stash-watching-a-folder) for asking for particular
+languages.
+
+To keep it running, copy `docker-compose.example.yml` to
+`docker-compose.yml`, point the first volume at your video library, and
+start it:
 
 ```sh
 curl -O https://raw.githubusercontent.com/Anastylosis/Scriptorium/master/docker-compose.example.yml
@@ -134,6 +156,10 @@ services:
 
 `STASH_URL` must be left unset — it has a default, so setting both is refused
 rather than guessed at.
+
+The subtitle is written as `<video stem>.<lang>.srt` beside the video, which
+is the sidecar convention Plex, Jellyfin, Kodi and VLC all pick up with no
+extra step — though a library server generally wants a scan before it notices.
 
 > **If Stash manages this library, use Stash mode.** Folder mode writes the
 > subtitle correctly and then stops, because attaching a caption to a scene is
@@ -351,7 +377,14 @@ x86 desktop or NAS CPU — a 40-minute scene in 4–8 minutes. RAM use is about
 not apply.
 
 If Spanish output disappoints on a particular scene, set `MODEL=large-v3` and
-re-tag it. Slower, a bit more accurate on accented or noisy audio.
+re-tag it. Slower, a bit more accurate on accented or noisy audio, and a 3 GB
+download rather than 1.6 GB.
+
+**There is no GPU path today.** The published image carries CPU wheels and no
+cuDNN, so `DEVICE=cuda` has nothing to load — and because the model is loaded
+lazily, the failure arrives at the first scene rather than at startup. The
+worker warns about it on the way up. CPU is the supported configuration and
+the numbers above are what it gives you.
 
 ## Optional: English → Spanish
 
