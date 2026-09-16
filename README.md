@@ -5,13 +5,25 @@
 
 *(formerly stash-subs)*
 
-Tag-driven subtitle generation for Stash. You mark the scenes you want; nothing
-else in the library is ever read.
+Subtitles for a video library you host yourself. faster-whisper transcribes,
+Ollama translates if you want a language the audio is not in, and the subtitle
+file lands beside the video where any player will look for it.
 
-With no Stash at all, it will watch a folder instead — see
-[Without Stash](#without-stash-watching-a-folder). The longer-term direction is
-a general self-hosted transcription/translation service with per-backend
-plugins; a mount and a Stash library are the two backends that exist today.
+There are two ways in, and they are the same worker underneath:
+
+- **Watch a folder.** Point it at a mount and it gets on with it. `touch
+  subs.en` in a directory is how you ask that shelf for English; with no
+  marker at all it transcribes whatever is spoken.
+  → [Without Stash](#without-stash-watching-a-folder)
+- **Take requests from Stash.** Tag a scene `subs:en`, `subs:auto`, or any
+  language you like, and it is picked up on the next poll — the tag is
+  swapped for `subs:done` and the caption attached. You mark the scenes you
+  want; nothing else in the library is ever read.
+  → [How you use it](#how-you-use-it)
+
+The longer-term direction is a general self-hosted transcription and
+translation service with per-backend plugins. A mount and a Stash library are
+the two backends that exist today.
 
 ## Install
 
@@ -35,6 +47,11 @@ The worker needs to see your videos at the same path Stash reports for them.
 If Stash has `/data/movie.mp4` mounted from `/volume1/media`, mount the same
 host directory at `/data` here. If you cannot, set `PATH_FROM` and `PATH_TO`
 to map between the two.
+
+Watching a folder instead of a Stash library? The same example file carries
+that service, commented out — mount your media, set `WATCH_DIRS`, and none of
+the path-matching above applies. See
+[Without Stash](#without-stash-watching-a-folder).
 
 ## How you use it
 
