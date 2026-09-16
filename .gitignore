@@ -17,3 +17,6 @@ htmlcov/
 # Coverage output from `pytest --cov`.
 coverage.xml
 .coverage
+
+# Claude Code local settings (permissions for this checkout).
+.claude/settings.local.json
