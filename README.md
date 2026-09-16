@@ -449,6 +449,29 @@ docker compose --profile translate up -d
 Setting `OLLAMA_URL` on its own is not enough. The same problem is reported at
 startup as `Ollama unreachable at ...`.
 
+## Optional: sharing what you make
+
+Scriptorium is self-contained: no account, no API key, nothing leaves the
+machine but the requests you configure to your own Stash and your own Ollama.
+Sharing a subtitle it made is a separate tool and a deliberate step, and
+nothing here changes if you never take it.
+
+[moansubs](https://moansubs.org) is a subtitle database that identifies a
+video by what it *is* rather than what it is called, and
+[MoanDrop](https://github.com/Anastylosis/MoanDrop) is its client:
+
+```sh
+moandrop match --lang en --write "Some Scene.mp4"    # is one already out there?
+moandrop push --generated "Some Scene.mp4" "Some Scene.en.srt"
+```
+
+Worth doing in that order. A subtitle somebody typed out by hand beats
+anything transcribed from the audio, and finding one saves you the CPU time.
+
+The marker Scriptorium writes into every file it generates is also how
+moansubs labels a track as machine-made, so a subtitle from here is labelled
+as such whether or not the uploader remembers the flag.
+
 ## Hallucination handling
 
 Whisper invents dialogue during long stretches of non-speech. Three defences are
