@@ -336,19 +336,23 @@ it works from the audio. Costs another ~3 GB download and a slower second pass,
 and only ever produces English.
 
 With neither configured, non-English audio tagged `subs:en` is skipped with a
-clear log message rather than producing a wrong file.
+clear log message rather than producing a wrong file. This affects English
+output only — turbo transcribes every language it knows, and any target that
+goes through the LLM is unaffected either way.
 
 ## What happens under the hood
 
 | Audio | Wanted | Route |
 |---|---|---|
-| Spanish | `subs:es` | Whisper transcribe |
-| Spanish | `subs:en` | LLM, or `TRANSLATE_MODEL` — see above |
-| English | `subs:en` | Whisper transcribe |
-| English | `subs:es` | Whisper transcribe → Ollama translation |
+| anything | the language being spoken | Whisper transcribe |
 | anything | `subs:auto` | Whisper transcribe in the detected language |
+| non-English | `subs:en` | Whisper translate, or `TRANSLATE_MODEL`, or the LLM |
+| anything | any other language | Whisper transcribe → LLM translation |
 
-Whisper only translates *into* English, which is why the last row needs the LLM.
+Spanish audio asked for in Spanish is the first row; Japanese audio asked for
+in French is the last. Only English has a route of its own, because English is
+the only language Whisper can translate *into* — every other target is the
+transcript passed to the LLM, whatever the pair.
 
 Source language is detected by sampling 45 seconds from the 25%, 50% and 75%
 marks of the file rather than trusting the first 30 seconds — intros and music
@@ -376,9 +380,9 @@ x86 desktop or NAS CPU — a 40-minute scene in 4–8 minutes. RAM use is about
 2 GB. ARM machines are slower; the image runs there but the numbers above do
 not apply.
 
-If Spanish output disappoints on a particular scene, set `MODEL=large-v3` and
-re-tag it. Slower, a bit more accurate on accented or noisy audio, and a 3 GB
-download rather than 1.6 GB.
+If a particular scene comes out badly — any language — set `MODEL=large-v3`
+and ask for it again. Slower, a bit more accurate on accented, quiet or noisy
+audio, and a 3 GB download rather than 1.6 GB.
 
 **There is no GPU path today.** The published image carries CPU wheels and no
 cuDNN, so `DEVICE=cuda` has nothing to load — and because the model is loaded
@@ -386,10 +390,23 @@ lazily, the failure arrives at the first scene rather than at startup. The
 worker warns about it on the way up. CPU is the supported configuration and
 the numbers above are what it gives you.
 
-## Optional: English → Spanish
+## Optional: translating into any other language
 
-Only needed if you want Spanish subs on English audio. Whisper translates *into*
-English natively, so every other direction needs an LLM.
+Whisper transcribes into whatever is being spoken, and translates natively
+*into* English and nowhere else. Every other direction — English audio to
+Polish, Japanese audio to French, Spanish audio to German — goes through an
+LLM, and that is what this section sets up.
+
+Ask for it the same way you ask for anything: tag the scene `subs:pl`, or
+`touch subs.fr` in the folder. Nothing about the language is special-cased,
+and nothing needs restarting to add one.
+
+Two limits are worth knowing. The code has to be a bare ISO 639 subtag, or
+Stash cannot attach the caption — see [Language codes](#language-codes). And
+the model has to speak it: `translategemma:4b` covers 55 languages, which is
+most of what Whisper can hear but not all of it. A language the model does
+not know produces a poor subtitle rather than an error, so spot-check a new
+one before turning it loose on a library.
 
 ```bash
 docker compose --profile translate up -d ollama
