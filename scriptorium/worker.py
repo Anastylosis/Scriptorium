@@ -106,6 +106,15 @@ class Worker:
                     "Non-English audio asked for in English will be skipped. "
                     "Set OLLAMA_URL, or TRANSLATE_MODEL=large-v3.", self.cfg.model.name)
 
+        # The model is loaded lazily, so a device the image cannot serve fails
+        # forty minutes in, on the first scene, as an unreadable CUDA error
+        # against a scene that then reads as failed. Say it on the way up.
+        if self.cfg.model.device != "cpu":
+            log.warning("WARNING: DEVICE=%s, but the published image ships CPU "
+                        "wheels and no cuDNN — the model will most likely fail "
+                        "to load on the first scene. CPU is the supported "
+                        "configuration.", self.cfg.model.device)
+
         if self.cfg.ollama.url:
             if not self.ollama.ready():
                 log.warning("WARNING: LLM translation unavailable — targets that "
