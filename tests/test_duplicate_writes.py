@@ -53,7 +53,7 @@ def run(tmp_path, tag_ids, env=None):
                                 "REGENERATE": "if-ours", **(env or {})}),
                status.Store(), client=object())
     w.models, w.ollama = Models(), Ollama()
-    w.plan = tags.Plan(requests={
+    w.library.plan = tags.Plan(requests={
         "t-en": tags.RequestTag("t-en", "subs:en", "en"),
         "t-ja": tags.RequestTag("t-ja", "subs:ja", "ja"),
         "t-auto": tags.RequestTag("t-auto", "subs:auto", tags.AUTO),

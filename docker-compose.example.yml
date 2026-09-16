@@ -25,6 +25,21 @@ services:
       # - OLLAMA_MODEL=translategemma:4b
     restart: unless-stopped
 
+  # No Stash? Drop the service above and use this one instead: it watches a
+  # mount, and an empty file named subs.en in a folder asks for English.
+  # scriptorium-folder:
+  #   image: ghcr.io/anastylosis/scriptorium:latest
+  #   volumes:
+  #     - /path/to/your/videos:/media
+  #     - scriptorium-state:/state
+  #     - scriptorium-models:/models
+  #   ports:
+  #     - "8088:8088"
+  #   environment:
+  #     - WATCH_DIRS=/media
+  #     - WATCH_LANGS=auto
+  #   restart: unless-stopped
+
   # Optional. Start with: docker compose --profile translate up -d
   ollama:
     image: ollama/ollama:latest
@@ -38,4 +53,5 @@ services:
 
 volumes:
   scriptorium-models:
+  scriptorium-state:
   ollama:

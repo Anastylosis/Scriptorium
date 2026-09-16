@@ -26,6 +26,7 @@ def test_empty_environment_yields_working_defaults():
     ("OLLAMA_MODEL", ("ollama", "model"), "qwen3:8b"),
     ("TRANSLATE_MODE", ("ollama", "mode"), "json"),
     ("HTTP_HOST", ("server", "host"), "127.0.0.1"),
+    ("STATE_DIR", ("watch", "state_dir"), "/var/lib/scriptorium"),
 ])
 def test_every_string_env_var_is_wired(name, path, value):
     cfg = config.from_env({name: value})
@@ -39,6 +40,7 @@ def test_every_string_env_var_is_wired(name, path, value):
     ("OLLAMA_BATCH", ("ollama", "batch"), 40),
     ("POLL_SECONDS", ("run", "poll_seconds"), 30),
     ("HTTP_PORT", ("server", "port"), 9000),
+    ("WATCH_MIN_AGE", ("watch", "min_age"), 5),
 ])
 def test_every_int_env_var_is_wired(name, path, value):
     cfg = config.from_env({name: str(value)})
@@ -50,6 +52,7 @@ def test_every_int_env_var_is_wired(name, path, value):
     ("RUN_ONCE", ("run", "run_once")),
     ("DRY_RUN", ("run", "dry_run")),
     ("OLLAMA_PULL", ("ollama", "pull")),
+    ("WATCH_RETRY_FAILED", ("watch", "retry_failed")),
 ])
 def test_every_bool_env_var_is_wired(name, path):
     section, field = path
@@ -76,6 +79,22 @@ def test_trailing_slash_is_stripped_from_urls():
 def test_request_tags_are_split_and_trimmed():
     cfg = config.from_env({"REQUEST_TAGS": " subs:en , subs:fr ,, "})
     assert cfg.tags.request == ["subs:en", "subs:fr"]
+
+
+def test_watch_dirs_are_split_and_trimmed():
+    cfg = config.from_env({"WATCH_DIRS": " /media , /more ,, "})
+    assert cfg.watch.dirs == ["/media", "/more"]
+
+
+def test_watch_langs_are_canonicalised_like_tags_are():
+    # subs:eng and subs:en name one language; WATCH_LANGS must not be the
+    # one place where they name two.
+    assert config.from_env({"WATCH_LANGS": "ENG,en,auto"}).watch.langs == ["en", "auto"]
+
+
+def test_a_watch_language_stash_could_not_attach_is_a_clear_error():
+    with pytest.raises(config.ConfigError, match="WATCH_LANGS"):
+        config.from_env({"WATCH_LANGS": "pt-BR"})
 
 
 def test_a_non_numeric_int_is_a_clear_error():

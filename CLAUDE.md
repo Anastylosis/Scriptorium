@@ -4,6 +4,9 @@ A worker that watches a Stash library for scenes tagged `subs:<lang>`,
 transcribes them with faster-whisper, optionally translates via Ollama, writes
 subtitles beside the video, and swaps the tag for `subs:done` / `subs:failed`.
 
+With `WATCH_DIRS` set and no Stash, it watches a mount instead: `subs.<lang>`
+marker files carry the request and a ledger carries `subs:done`.
+
 Docker only. Python 3.12. GPL-3.0-only. `README.md` is for users; `PLAN.md`
 (untracked) holds working notes.
 
@@ -26,6 +29,8 @@ config.py     env -> frozen dataclasses, injectable so tests need no environ
 paths.py      PathMapper: Stash's view of a path -> ours
 logsetup.py   stdout + the ring buffer the status page renders
 stash.py      GraphQL transport and queries, no policy
+library.py    the seam: where work comes from, what finishing it means
+folder.py     the Stash-less library: marker files, the ledger
 tags.py       which subs:<lang> tags exist and what they mean
 langs.py      ISO 639 validation
 audio.py      PyAV decoding: duration, language-sample windows
@@ -34,11 +39,40 @@ subtitles.py  render SRT/VTT, parse, annotate, atomic write
 translate.py  Ollama client
 captions.py   what Stash already has attached
 outcomes.py   per-target results; decides done vs failed, and rescan
-worker.py     the queue loop
+worker.py     the queue loop, indifferent to which library it is
 status.py     state store, status page, POST controls
 ```
 
 A cue is a plain `(start, end, text)` tuple. There is no Cue class.
+
+## Folder mode
+
+- `WATCH_DIRS` is the switch, not a missing `STASH_URL`: that has always had a
+  default, so unset cannot mean "there is no Stash". Both set is refused.
+- `FolderLibrary` synthesises the `captions` list from the subtitles on disk,
+  in Stash's shape. That is why `produce()` has no branch for folder mode —
+  the "already covered by `foo.eng.srt`" reasoning and `REGENERATE` work
+  unchanged on both sides.
+- The ledger is `subs:done`. Disk alone cannot be: an `auto` request has no
+  destination filename until the detector has run, so every poll would reload
+  the model and listen to every file again, and a file with no speech would be
+  retried forever.
+- The ledger records the stat taken **when the job was queued**, not a fresh
+  one at the end. A file that changed during a two-hour transcription has not
+  been done, and recording the new mtime buries the new content forever.
+- An entry stops counting when the requested languages grow, so `touch
+  subs.es` in a finished directory re-opens every video in it.
+- The ledger forgets a file only when its root produced **at least one video
+  that poll**. An unmounted directory reads as an empty one rather than an
+  error, and pruning on that would re-transcribe a library because its NFS
+  server blinked.
+- `outcomes.Scene.wrote` exists because the ledger cannot reconstruct what
+  landed from the target list: the salvaged source transcript is written
+  under a language nobody asked for, by a target that then failed.
+- `produce()` excludes its own destinations from the "already covered by
+  another spelling" check. Reading the caption list off the disk we write to
+  otherwise makes every file we wrote cover itself, and `REGENERATE=if-ours`
+  a setting that can never fire.
 
 ## Stash constraints
 
@@ -102,12 +136,14 @@ These cause silent failures, not errors:
 
 ## Testing
 
-351 tests, ~7s, no network or model downloads. Audio tests synthesise real
+398 tests, ~7s, no network or model downloads. Audio tests synthesise real
 media with PyAV; everything else uses fakes at the real seams.
 
 The suite has repeatedly passed while the thing was broken. **After changing
 anything that writes a file or talks to Stash, run it** — a stub Stash plus
-`MODEL=tiny RUN_ONCE=1` gives a full end-to-end pass in seconds.
+`MODEL=tiny RUN_ONCE=1` gives a full end-to-end pass in seconds. Folder mode
+needs no stub at all: a directory with a video in it, `WATCH_DIRS=/media
+WATCH_MIN_AGE=0 MODEL=tiny RUN_ONCE=1`, and the ledger to read afterwards.
 
 ## Conventions
 
