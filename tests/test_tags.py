@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from scriptorium import config, status, tags
+from scriptorium import config, outcomes, status, tags
 from scriptorium.worker import Worker
 
 
@@ -67,7 +67,7 @@ def test_two_tags_naming_one_language_are_transcribed_once():
     w = worker_with(plan, client)
     scene = {"tags": [{"id": tid, "name": t.name}
                       for tid, t in plan.requests.items()]}
-    assert w.targets_for(scene) == ["en"]
+    assert w.library.targets_for(scene) == ["en"]
 
 
 def test_rejects_regional_subtags_and_nonsense():
@@ -172,8 +172,8 @@ def test_explicit_override_wins(value, expected):
 
 def worker_with(plan, client):
     w = Worker(config.from_env({}), status.Store(), client=client)
-    w.plan = plan
-    w.done_id, w.failed_id = plan.done_id, plan.failed_id
+    w.library.plan = plan
+    w.library.done_id, w.library.failed_id = plan.done_id, plan.failed_id
     return w
 
 
@@ -183,7 +183,7 @@ def test_targets_come_from_the_plan_used_for_the_query():
     ids = {t.name: t.id for t in plan.requests.values()}
     scene = {"tags": [{"id": ids["subs:en"], "name": "subs:en"},
                       {"id": "999", "name": "4k"}]}
-    assert w.targets_for(scene) == ["en"]
+    assert w.library.targets_for(scene) == ["en"]
 
 
 def test_only_the_tags_acted_on_are_stripped():
@@ -198,7 +198,7 @@ def test_only_the_tags_acted_on_are_stripped():
         {"id": ids["subs:fr"], "name": "subs:fr"},   # added mid-run
         {"id": "999", "name": "4k"},
     ]
-    w.swap_tags(scene, ok=True)
+    w.library.finish(scene, outcomes.Scene())
     _, written = client.updates[0]
     assert ids["subs:en"] not in written, "the handled tag must be removed"
     assert ids["subs:fr"] in written, "the tag added mid-run must survive"
@@ -213,7 +213,7 @@ def test_unrelated_tags_added_mid_run_are_preserved():
     scene = {"id": "5", "tags": [{"id": en, "name": "subs:en"}]}
     client._scene_tags = [{"id": en, "name": "subs:en"},
                           {"id": "42", "name": "favourite"}]
-    w.swap_tags(scene, ok=False)
+    w.library.finish(scene, outcomes.failed('nope'))
     _, written = client.updates[0]
     assert "42" in written
     assert plan.failed_id in written

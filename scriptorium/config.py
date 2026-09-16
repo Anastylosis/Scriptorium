@@ -79,6 +79,27 @@ class StashCfg:
 
 
 @dataclass(frozen=True)
+class WatchCfg:
+    """Folder mode: a watched mount instead of a Stash library.
+
+    `dirs` is the switch. STASH_URL has always had a default, so an unset one
+    cannot mean "there is no Stash"; something has to be set deliberately.
+    """
+    dirs: list = field(default_factory=list)
+    # What a video with no subs.<lang> marker near it is asking for.
+    langs: list = field(default_factory=lambda: ["auto"])
+    extensions: list = field(default_factory=lambda: [
+        "mp4", "mkv", "m4v", "mov", "avi", "webm", "wmv", "flv", "ts",
+        "mpg", "mpeg"])
+    # Holds the ledger, which is folder mode's subs:done.
+    state_dir: str = "/state"
+    # A file still being copied in is not a file yet.
+    min_age: int = 60
+    # A failure is remembered, like subs:failed. Set to retry them anyway.
+    retry_failed: bool = False
+
+
+@dataclass(frozen=True)
 class ModelCfg:
     name: str = "large-v3-turbo"
     directory: str = "/models"
@@ -156,6 +177,7 @@ class ServerCfg:
 @dataclass(frozen=True)
 class Config:
     stash: StashCfg = field(default_factory=StashCfg)
+    watch: WatchCfg = field(default_factory=WatchCfg)
     model: ModelCfg = field(default_factory=ModelCfg)
     tags: TagsCfg = field(default_factory=TagsCfg)
     ollama: OllamaCfg = field(default_factory=OllamaCfg)
@@ -181,6 +203,11 @@ def from_env(env: Mapping[str, str] | None = None) -> Config:
         raise ConfigError(
             f"OUTPUT_FORMATS must be one or more of {', '.join(OUTPUT_FORMATS)}, "
             f"got {', '.join(cfg.output.formats) or '(empty)'}")
+    if cfg.watch.dirs and _get(env, "STASH_URL", None) is not None:
+        raise ConfigError(
+            "WATCH_DIRS and STASH_URL are both set. One container reads one "
+            "library: unset STASH_URL for folder mode, or unset WATCH_DIRS "
+            "to keep talking to Stash.")
     if cfg.annotate.text:
         from .subtitles import TemplateError, validate_template
         try:
@@ -190,6 +217,21 @@ def from_env(env: Mapping[str, str] | None = None) -> Config:
     return cfg
 
 
+def _watch_langs(env):
+    """WATCH_LANGS, canonicalised the same way a subs:<lang> tag is, so
+    `eng` and `en` name one language in folder mode too."""
+    from .langs import normalize
+    out = []
+    for name in _list(env, "WATCH_LANGS", ["auto"]):
+        code = "auto" if name.strip().lower() == "auto" else normalize(name)
+        if code is None:
+            raise ConfigError(
+                f"WATCH_LANGS must be ISO 639 codes or 'auto', got {name!r}")
+        if code not in out:
+            out.append(code)
+    return out
+
+
 def _build(env) -> Config:
     return Config(
         stash=StashCfg(
@@ -197,6 +239,14 @@ def _build(env) -> Config:
             api_key=_get(env, "STASH_API_KEY", ""),
             path_from=_get(env, "PATH_FROM", "/data"),
             path_to=_get(env, "PATH_TO", "/data"),
+        ),
+        watch=WatchCfg(
+            dirs=_list(env, "WATCH_DIRS", []),
+            langs=_watch_langs(env),
+            extensions=_list(env, "WATCH_EXTENSIONS", WatchCfg().extensions),
+            state_dir=_get(env, "STATE_DIR", "/state"),
+            min_age=_int(env, "WATCH_MIN_AGE", 60),
+            retry_failed=_bool(env, "WATCH_RETRY_FAILED", False),
         ),
         model=ModelCfg(
             name=_get(env, "MODEL", "large-v3-turbo"),

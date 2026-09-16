@@ -36,6 +36,8 @@ class Store:
             "started_scene": None,
             "next_poll": None,
             "request_tags": [],
+            # How a library says work arrives, when it is not tags in Stash.
+            "waiting_hint": None,
             "poll_note": None,
             "version": __version__,
         }
@@ -261,8 +263,12 @@ def _resting(st, status):
     if status == "paused":
         note = "Nothing starts until you resume."
     else:
-        note = ("Work starts on the next poll." if queue else
-                f"Tag a scene in Stash with {tags} and it will be picked up.")
+        if queue:
+            note = "Work starts on the next poll."
+        else:
+            hint = st.get("waiting_hint")
+            note = (html.escape(hint) if hint else
+                    f"Tag a scene in Stash with {tags} and it will be picked up.")
         nxt = st.get("next_poll")
         if nxt:
             note += f" Next poll in {max(0, int(nxt - time.time()))}s."

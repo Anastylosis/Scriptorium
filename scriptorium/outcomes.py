@@ -34,6 +34,10 @@ class Target(NamedTuple):
 class Scene(NamedTuple):
     targets: tuple = ()
     fatal: str = ""      # set when the scene failed before any target ran
+    # Every file written for this scene. Not derivable from `targets`: the
+    # salvaged source transcript is written under a language nobody asked
+    # for, by a target that went on to fail.
+    wrote: tuple = ()
 
     @property
     def ok(self) -> bool:

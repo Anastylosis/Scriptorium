@@ -51,12 +51,11 @@ def run_once(monkeypatch, scene, result, env=None):
     env = {"RUN_ONCE": "1", **(env or {})}
     client = Client(scene)
     w = Worker(config.from_env(env), status.Store(), client=client)
-    w.plan = tags.Plan(requests={}, done_id="d", failed_id="f")
-    w.done_id, w.failed_id = "d", "f"
-    monkeypatch.setattr(w, "refresh_plan", lambda: w.plan)
+    w.library.done_id, w.library.failed_id = "d", "f"
+    w.library.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
+                               done_id="d", failed_id="f")
+    monkeypatch.setattr(w.library, "refresh_plan", lambda: w.library.plan)
     monkeypatch.setattr(w, "process_scene", lambda s: result)
-    w.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
-                       done_id="d", failed_id="f")
     w.run()
     return client
 
@@ -117,10 +116,10 @@ def run_batch(monkeypatch, scenes, result, env=None):
     client = Batch(scenes)
     w = Worker(config.from_env({"RUN_ONCE": "1", **(env or {})}),
                status.Store(), client=client)
-    w.done_id, w.failed_id = "d", "f"
-    w.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
-                       done_id="d", failed_id="f")
-    monkeypatch.setattr(w, "refresh_plan", lambda: w.plan)
+    w.library.done_id, w.library.failed_id = "d", "f"
+    w.library.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
+                               done_id="d", failed_id="f")
+    monkeypatch.setattr(w.library, "refresh_plan", lambda: w.library.plan)
     monkeypatch.setattr(w, "process_scene", lambda s: result)
     w.run()
     return client
@@ -178,10 +177,10 @@ def test_the_batch_is_flushed_when_the_queue_is_abandoned(monkeypatch):
     scenes = [scene_at(str(i), f"/data/d{i}/clip.mp4") for i in range(3)]
     client = Batch(scenes)
     w = Worker(config.from_env({"RUN_ONCE": "1"}), status.Store(), client=client)
-    w.done_id, w.failed_id = "d", "f"
-    w.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
-                       done_id="d", failed_id="f")
-    monkeypatch.setattr(w, "refresh_plan", lambda: w.plan)
+    w.library.done_id, w.library.failed_id = "d", "f"
+    w.library.plan = tags.Plan(requests={"t": tags.RequestTag("t", "subs:en", "en")},
+                               done_id="d", failed_id="f")
+    monkeypatch.setattr(w.library, "refresh_plan", lambda: w.library.plan)
 
     def one_then_pause(scene):
         w.control.pause()

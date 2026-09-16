@@ -1,16 +1,16 @@
-"""The queue loop: find tagged scenes, produce subtitles, swap the tags."""
+"""The queue loop: take what the library offers, produce subtitles, record
+the outcome. Which library it is — Stash, or a watched folder — is `library`'s
+business, not this module's."""
 
 import logging
 import threading
 import time
 from collections import Counter
-from pathlib import Path
 
 from . import __version__, captions, langs, outcomes, subtitles, tags
 from .asr import Models, whisper_translates
 from .audio import probe_duration
-from .paths import PathMapper
-from .stash import Client
+from .library import open_library
 from .translate import Ollama
 
 log = logging.getLogger(__name__)
@@ -72,28 +72,23 @@ class Control:
 
 
 class Worker:
-    def __init__(self, cfg, store, control=None, client=None):
+    def __init__(self, cfg, store, control=None, client=None, library=None):
         self.cfg = cfg
         self.store = store
         self.control = control or Control()
-        self.client = client or Client(cfg.stash.url, cfg.stash.api_key)
-        self.mapper = PathMapper(cfg.stash.path_from, cfg.stash.path_to)
+        # Where the work comes from: a Stash library, or a watched folder.
+        # Everything below process_scene is the same either way.
+        self.library = library or open_library(cfg, client=client)
         self.models = Models(cfg.model)
         self.ollama = Ollama(cfg.ollama)
-        self.discover, self._discover_note = tags.discovery_enabled(cfg.tags)
-        self.plan = tags.Plan()
         # Destinations already produced for the scene in hand; see write().
         self._written = set()
 
     # -- setup ------------------------------------------------------------
 
     def bootstrap(self):
-        self.client.probe_captions()
-        done_id, failed_id = tags.bootstrap(self.client, self.cfg.tags)
-        self.done_id, self.failed_id = done_id, failed_id
-        if self._discover_note:
-            log.info("%s", self._discover_note)
-        self.refresh_plan()
+        self.library.bootstrap()
+        self.publish_requests()
 
         if not whisper_translates(self.cfg.model.name):
             if self.cfg.model.translate_model:
@@ -108,7 +103,7 @@ class Worker:
             else:
                 log.warning(
                     "WARNING: %s cannot translate and no fallback is configured. "
-                    "Non-English audio tagged subs:en will be skipped. "
+                    "Non-English audio asked for in English will be skipped. "
                     "Set OLLAMA_URL, or TRANSLATE_MODEL=large-v3.", self.cfg.model.name)
 
         if self.cfg.ollama.url:
@@ -119,34 +114,11 @@ class Worker:
             log.info("OLLAMA_URL not set — only source-language and English "
                      "output are possible")
 
-    def refresh_plan(self):
-        if self.discover:
-            self.plan = tags.discover(self.client, self.cfg.tags,
-                                      self.done_id, self.failed_id,
-                                      previous=self.plan)
-        else:
-            self.plan = tags.fixed(self.client, self.cfg.tags,
-                                   self.done_id, self.failed_id)
-        self.store.update(request_tags=self.plan.names())
-        return self.plan
+    def publish_requests(self):
+        self.store.update(request_tags=self.library.requested(),
+                          waiting_hint=self.library.waiting_hint())
 
     # -- per scene --------------------------------------------------------
-
-    def targets_for(self, scene):
-        """The languages this scene is asking for, by tag id.
-
-        Matched on id against the plan used for the query, not by re-parsing
-        names, so a tag created mid-scene cannot be mistaken for one we acted on.
-
-        Deduplicated: `subs:en` and `subs:eng` are different tags naming the
-        same language, and a scene carrying both should be transcribed once.
-        """
-        wanted = []
-        for t in scene["tags"]:
-            req = self.plan.requests.get(t["id"])
-            if req is not None and req.lang not in wanted:
-                wanted.append(req.lang)
-        return wanted
 
     def _progress(self, position):
         self.store.update(position=position)
@@ -157,7 +129,7 @@ class Worker:
             log.info("scene %s: no file attached, skipping", scene["id"])
             return outcomes.failed("no file attached")
 
-        local = self.mapper.to_local(files[0]["path"])
+        local = self.library.to_local(scene)
         label = scene.get("title") or local.name
         log.info("scene %s: %s", scene["id"], label)
 
@@ -165,7 +137,7 @@ class Worker:
             log.error("  ERROR path not visible to this container: %s", local)
             return outcomes.failed(f"path not visible: {local}")
 
-        wanted = self.targets_for(scene)
+        wanted = self.library.targets_for(scene)
         if not wanted:
             return outcomes.Scene()
 
@@ -195,7 +167,8 @@ class Worker:
         self._written = set()
         produced = tuple(self.produce(local, scene, src, t, cache, duration)
                          for t in wanted)
-        result = outcomes.Scene(targets=produced)
+        result = outcomes.Scene(targets=produced,
+                                wrote=tuple(sorted(self._written)))
         log.info("  %s", result.summary())
         return result
 
@@ -222,8 +195,8 @@ class Worker:
             return outcomes.Target(lang, outcomes.SKIPPED, why)
         dest = subtitles.dest_for(local, lang, pending[0])
 
-        # Stash may already carry this language under another spelling of the
-        # same code; writing ours as well would just add a duplicate track.
+        # The library may already carry this language under another spelling of
+        # the same code; writing ours as well would just add a duplicate track.
         if cfg.run.regenerate != "always":
             covered = captions.existing_file(local, scene, lang)
             if covered is not None:
@@ -393,50 +366,6 @@ class Worker:
             log.info("  source transcript kept as %s", salvage.name)
             return None, salvage_new, (outcomes.ERROR, f"translation failed: {e}")
 
-    @staticmethod
-    def parent_of(scene):
-        """The directory Stash keeps the scene's file in.
-
-        Stash's own path, not the mapped local one — this is what Stash is
-        told to go and look at.
-        """
-        files = scene.get("files") or []
-        return str(Path(files[0]["path"]).parent) if files else ""
-
-    def flush_scans(self, pending):
-        """Ask Stash to rescan the directories that gained a caption.
-
-        One job for the batch rather than one per scene: the old shape had
-        Stash rescanning a directory once per file written into it, which on a
-        long queue keeps a scan running continuously against the same database
-        the worker is still swapping tags in.
-        """
-        if not pending:
-            return
-        paths = sorted(pending)
-        pending.clear()
-        try:
-            self.client.metadata_scan(paths)
-        except Exception as e:
-            log.error("  could not ask Stash to rescan %d path(s): %s",
-                      len(paths), e)
-
-    def swap_tags(self, scene, ok):
-        """Replace the request tags with done/failed.
-
-        The scene's tags are re-read first: sceneUpdate replaces the whole
-        list, and the poll-time snapshot can be an hour old on a long scene,
-        so writing it back would clobber anything added meanwhile.
-        """
-        handled = {t["id"] for t in scene["tags"] if t["id"] in self.plan.requests}
-        try:
-            current = self.client.scene_tags(scene["id"]) or scene["tags"]
-        except Exception:
-            current = scene["tags"]
-        keep = [t["id"] for t in current if t["id"] not in handled]
-        keep.append(self.done_id if ok else self.failed_id)
-        self.client.set_scene_tags(scene["id"], sorted(set(keep)))
-
     # -- loop -------------------------------------------------------------
 
     def run(self):
@@ -448,12 +377,11 @@ class Worker:
                 self.control.sleep(1.0)
                 continue
             try:
-                # Re-read the tag set each poll so a language tag created
-                # since startup is honoured without a restart.
-                plan = self.refresh_plan()
-                scenes = self.client.find_tagged_scenes(plan.ids) if plan.ids else []
+                scenes = self.library.poll()
+                self.publish_requests()
             except Exception as e:
-                log.error("could not reach Stash: %s", e)
+                log.error("could not read the library (%s): %s",
+                          self.library.label(), e)
                 self.store.update(status="error", stage=str(e)[:200],
                                   next_poll=time.time() + poll)
                 if cfg.run.run_once:
@@ -469,7 +397,7 @@ class Worker:
             # than inferred from the path changing between scenes: the sort is
             # an optimisation Stash may refuse, and on an id-sorted queue the
             # same directory comes back dozens of times.
-            remaining = Counter(self.parent_of(s) for s in scenes)
+            remaining = Counter(self.library.parent_of(s) for s in scenes)
             last_scan = time.monotonic()
             for i, scene in enumerate(scenes):
                 if self.control.stopping or self.control.paused:
@@ -484,26 +412,26 @@ class Worker:
                         f"FAILED scene {scene['id']}: {type(e).__name__}")
                 if cfg.run.dry_run:
                     continue
-                parent = self.parent_of(scene)
+                parent = self.library.parent_of(scene)
                 remaining[parent] -= 1
                 try:
-                    self.swap_tags(scene, result.ok)
+                    self.library.finish(scene, result)
                     if result.needs_scan:
                         pending_scans.add(parent)
                 except Exception as e:
-                    log.error("  could not update tags: %s", e)
+                    log.error("  could not record the outcome: %s", e)
                 # Nothing more is coming for this directory, so it will not
                 # get a better moment than now. The interval covers the one
                 # that takes longer to finish than a caption can wait.
                 if pending_scans and (
                         not remaining[parent]
                         or time.monotonic() - last_scan >= SCAN_INTERVAL):
-                    self.flush_scans(pending_scans)
+                    self.library.flush(pending_scans)
                     last_scan = time.monotonic()
 
             # Also covers breaking out of the loop for pause or stop, so a
             # written caption is never left unregistered.
-            self.flush_scans(pending_scans)
+            self.library.flush(pending_scans)
 
             if cfg.run.run_once:
                 log.info("done (RUN_ONCE)")

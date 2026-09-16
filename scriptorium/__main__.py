@@ -22,9 +22,9 @@ def main(argv=None):
     # reachable while those are still running.
     status.serve(store, ring, control, cfg.server.host, cfg.server.port)
     log.info("status page on http://%s:%d", cfg.server.host, cfg.server.port)
-    log.info("scriptorium starting — Stash at %s", cfg.stash.url)
 
     worker = Worker(cfg, store, control)
+    log.info("scriptorium starting — %s", worker.library.label())
     try:
         worker.bootstrap()
     except Exception as e:
