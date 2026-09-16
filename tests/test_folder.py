@@ -336,6 +336,64 @@ def test_ledger_handles_a_missing_entry_gracefully(tmp_path):
     assert ledger.handled(tmp_path / "x.mkv", 1, 1, ["en"]) is False
 
 
+class Models:
+    """Whisper, minus Whisper."""
+
+    def detect_language(self, path, duration):
+        return "en", 1.0
+
+    def transcribe(self, path, language, task="transcribe", model=None,
+                   on_progress=None):
+        return [(1.0, 3.0, "hello")], None
+
+
+def folder_worker(tmp_path, monkeypatch, **env):
+    from scriptorium import worker as worker_mod
+    monkeypatch.setattr(worker_mod, "probe_duration", lambda path: 60.0)
+    cfg = cfg_for(tmp_path, **env)
+    w = Worker(cfg, status.Store(), library=FolderLibrary(cfg))
+    w.library.bootstrap()
+    w.models = Models()
+    return w
+
+
+def test_if_ours_regenerates_a_subtitle_we_wrote(tmp_path, monkeypatch):
+    # The caption list here is read off the same disk we write to, so
+    # counting our own file as "already covered" would make if-ours a
+    # setting that never does anything.
+    video(tmp_path / "clip.mkv")
+    ours = tmp_path / "clip.en.srt"
+    ours.write_text("1\n00:00:01,000 --> 00:00:03,000\nold [scriptorium]\n\n")
+    w = folder_worker(tmp_path, monkeypatch, WATCH_LANGS="en",
+                      REGENERATE="if-ours")
+    result = w.process_scene(w.library.poll()[0])
+    assert [t.action for t in result.targets] == [outcomes.WRITTEN]
+    assert "hello" in ours.read_text()
+
+
+def test_a_hand_made_subtitle_is_still_left_alone(tmp_path, monkeypatch):
+    video(tmp_path / "clip.mkv")
+    theirs = tmp_path / "clip.en.srt"
+    theirs.write_text("1\n00:00:01,000 --> 00:00:03,000\nmine\n\n")
+    w = folder_worker(tmp_path, monkeypatch, WATCH_LANGS="en",
+                      REGENERATE="if-ours")
+    result = w.process_scene(w.library.poll()[0])
+    assert [t.action for t in result.targets] == [outcomes.SKIPPED]
+    assert theirs.read_text().endswith("mine\n\n")
+
+
+def test_another_spelling_of_the_language_still_covers_it(tmp_path, monkeypatch):
+    # foo.eng.srt makes foo.en.srt pointless whoever wrote it.
+    video(tmp_path / "clip.mkv")
+    (tmp_path / "clip.eng.srt").write_text("1\n")
+    w = folder_worker(tmp_path, monkeypatch, WATCH_LANGS="en",
+                      REGENERATE="if-ours")
+    result = w.process_scene(w.library.poll()[0])
+    assert result.targets[0].action == outcomes.SKIPPED
+    assert "covered by clip.eng.srt" in result.targets[0].detail
+    assert not (tmp_path / "clip.en.srt").exists()
+
+
 # -- keeping the ledger honest --------------------------------------------
 
 def test_a_deleted_video_is_forgotten(tmp_path):

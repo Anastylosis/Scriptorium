@@ -136,7 +136,7 @@ These cause silent failures, not errors:
 
 ## Testing
 
-398 tests, ~7s, no network or model downloads. Audio tests synthesise real
+401 tests, ~7s, no network or model downloads. Audio tests synthesise real
 media with PyAV; everything else uses fakes at the real seams.
 
 The suite has repeatedly passed while the thing was broken. **After changing

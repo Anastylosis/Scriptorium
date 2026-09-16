@@ -195,11 +195,17 @@ class Worker:
             return outcomes.Target(lang, outcomes.SKIPPED, why)
         dest = subtitles.dest_for(local, lang, pending[0])
 
-        # The library may already carry this language under another spelling of
-        # the same code; writing ours as well would just add a duplicate track.
+        # The library may already carry this language under another spelling
+        # of the same code; writing ours as well would just add a duplicate
+        # track. Our own destinations are excluded: `should_write` has already
+        # ruled on those, and counting one of them as "covered" is how
+        # regenerate=if-ours came to refuse to regenerate anything once the
+        # caption was registered — in folder mode, where the caption list is
+        # read off the disk we just wrote to, that would be always.
         if cfg.run.regenerate != "always":
+            mine = {subtitles.dest_for(local, lang, f) for f in formats}
             covered = captions.existing_file(local, scene, lang)
-            if covered is not None:
+            if covered is not None and covered not in mine:
                 log.info("  %s already covers %s, skipping", covered.name, lang)
                 return outcomes.Target(lang, outcomes.SKIPPED,
                                        f"covered by {covered.name}")
