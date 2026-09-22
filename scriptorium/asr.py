@@ -7,6 +7,23 @@ from . import audio
 
 log = logging.getLogger(__name__)
 
+# Cue geometry. faster-whisper's `vad_filter` transcribes a timeline with the
+# silence cut out and then maps the timestamps back onto the original. A
+# segment whose end lands past a removed stretch is restored to the *far* side
+# of it, so a two-word line can come back holding the screen until the next
+# person speaks -- minutes, on sparse audio. The tell is that consecutive cues
+# come back exactly contiguous, end[i] == start[i+1] to the millisecond, which
+# real speech never is. Nothing in the text filters below sees this: it is a
+# timestamp artefact, not a hallucinated word.
+#
+# So cap what a cue may occupy. 7s is the usual broadcast ceiling for a single
+# subtitle event; the floor keeps a one-word cue on screen long enough to read.
+# The true end is not recoverable here -- only bounded.
+MAX_CUE_SECONDS = 7.0
+MIN_CUE_SECONDS = 1.2
+# Roughly one frame at 25fps: enough that two cues never render stacked.
+CUE_GAP_SECONDS = 0.04
+
 # Segments matching these are almost always Whisper hallucinating on non-speech.
 JUNK_PATTERNS = [
     re.compile(p, re.IGNORECASE) for p in [
@@ -27,7 +44,12 @@ def whisper_translates(name: str) -> bool:
 
 
 def clean(segments, on_progress=None):
-    """Drop hallucinations: junk phrases, silence artefacts, repeat loops.
+    """Drop hallucinations, and bound how long a cue may hold the screen.
+
+    Junk phrases, silence artefacts and repeat loops are filtered out; every
+    surviving cue is clamped to MAX_CUE_SECONDS and trimmed back if it would
+    overlap the cue after it (see MAX_CUE_SECONDS on why faster-whisper hands
+    us ends that run minutes past the speech).
 
     faster-whisper yields segments lazily, so consuming them here doubles as
     the progress signal: each segment's end timestamp is how far into the
@@ -54,7 +76,18 @@ def clean(segments, on_progress=None):
                 continue
         else:
             prev, repeats = norm, 0
-        out.append((s.start, s.end, text))
+        start = s.start
+        end = max(min(s.end, start + MAX_CUE_SECONDS), start + MIN_CUE_SECONDS)
+        # Trim the previous cue rather than looking ahead: clean() consumes
+        # segments lazily and that iteration is the progress bar, so it must
+        # not buffer one to peek at the next.
+        if out:
+            p_start, p_end, p_text = out[-1]
+            if p_end > start - CUE_GAP_SECONDS:
+                out[-1] = (p_start,
+                           max(start - CUE_GAP_SECONDS, p_start + 0.05),
+                           p_text)
+        out.append((start, end, text))
     return out
 
 

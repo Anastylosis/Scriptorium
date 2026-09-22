@@ -504,6 +504,15 @@ built in:
 Add your own patterns to `JUNK_PATTERNS` in the script if you see recurring
 artefacts specific to your files.
 
+A fourth defence is about timing rather than text. Because the VAD decodes a
+timeline with the silence cut out, a segment's *end* is restored to the far
+side of whatever was removed, and a two-word line can come back holding the
+screen until the next person speaks — minutes, on sparse audio. The giveaway
+is cues that are exactly contiguous, which real speech never is. Every cue is
+therefore capped at 7 seconds (the usual broadcast ceiling for one subtitle),
+floored at 1.2 so a single word is readable, and trimmed back if the next cue
+starts sooner. Subtitles written before 0.9.1 can hold the screen this way.
+
 ## Useful knobs
 
 | Variable | Default | Notes |

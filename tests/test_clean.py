@@ -109,3 +109,53 @@ def test_accepts_a_generator_and_reports_progress_as_it_goes():
         ("yield", 1), ("progress", 2),
         ("yield", 2), ("progress", 3),
     ]
+
+
+def test_a_cue_may_not_hold_the_screen_past_the_ceiling():
+    # The VAD timestamp-restore artefact: two words restored to the far side
+    # of a removed silence, holding the screen for nine minutes.
+    out = s.clean([seg(30.0, 570.0, "Daddy.")])
+    assert out == [(30.0, 30.0 + s.MAX_CUE_SECONDS, "Daddy.")]
+
+
+def test_a_short_cue_is_held_long_enough_to_read():
+    out = s.clean([seg(10.0, 10.2, "oh")])
+    assert out == [(10.0, 10.0 + s.MIN_CUE_SECONDS, "oh")]
+
+
+def test_speech_inside_the_ceiling_is_left_alone():
+    out = s.clean([seg(4.0, 9.5, "a line that really does run five seconds")])
+    assert out == [(4.0, 9.5, "a line that really does run five seconds")]
+
+
+def test_contiguous_cues_are_separated_not_stacked():
+    # end[i] == start[i+1] is the artefact's signature. Neither cue may still
+    # be on screen when the next one arrives.
+    out = s.clean([seg(0.0, 100.0, "first"), seg(100.0, 200.0, "second")])
+    assert out[0][1] < out[1][0], "cues still overlap"
+    assert out[0][1] == s.MAX_CUE_SECONDS
+
+
+def test_a_clamped_cue_still_yields_to_one_that_starts_sooner():
+    # Here the ceiling alone is not enough: the next line arrives 3s in, so
+    # the trim has to pull the first cue back off the screen.
+    out = s.clean([seg(0.0, 100.0, "first"), seg(3.0, 4.0, "second")])
+    assert out[0][1] == 3.0 - s.CUE_GAP_SECONDS
+    assert out[0][1] < out[1][0], "cues still overlap"
+
+
+def test_the_readability_floor_never_wins_against_the_next_cue():
+    # A 0.1s segment followed 0.3s later: the floor would push the first cue
+    # over the second, so the trim has to claw it back.
+    out = s.clean([seg(0.0, 0.1, "a"), seg(0.3, 1.0, "b")])
+    assert out[0][1] < out[1][0]
+    assert out[0][1] > out[0][0], "cue must keep a positive duration"
+
+
+def test_clamping_survives_a_dropped_segment_in_between():
+    # The trim looks at the previous *kept* cue, not the previous segment.
+    out = s.clean([seg(0.0, 90.0, "real"),
+                   seg(10.0, 20.0, "Thanks for watching"),
+                   seg(95.0, 96.0, "also real")])
+    assert texts(out) == ["real", "also real"]
+    assert out[0][1] == s.MAX_CUE_SECONDS
