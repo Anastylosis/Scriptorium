@@ -9,6 +9,9 @@ Subtitles for a video library you host yourself. faster-whisper transcribes,
 Ollama translates if you want a language the audio is not in, and the subtitle
 file lands beside the video where any player will look for it.
 
+You do not need Stash. Watching a folder is a complete way to run it on its
+own; Stash is one optional source of requests, not a requirement.
+
 There are two ways in, and they are the same worker underneath:
 
 - **Watch a folder.** Point it at a mount and it gets on with it. `touch
