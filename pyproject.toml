@@ -5,7 +5,7 @@ name = "scriptorium"
 # Kept because [project] requires the field, pinned at 0.0.0 so it cannot
 # quietly disagree with a release the way the old hand-bumped pair did.
 version = "0.0.0"
-description = "Tag-driven subtitle generation for Stash"
+description = "Self-hosted subtitles for a video library: faster-whisper transcribes, Ollama optionally translates"
 license = "GPL-3.0-only"
 # Declared so Dependabot does not propose bumps that need a newer
 # interpreter than the image ships (it offered numpy 2.5.1, which is

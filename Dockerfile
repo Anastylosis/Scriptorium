@@ -14,7 +14,7 @@ ARG COMMIT=""
 ARG DATE=""
 
 LABEL org.opencontainers.image.title="Scriptorium" \
-      org.opencontainers.image.description="Tag-driven subtitle generation for Stash" \
+      org.opencontainers.image.description="Self-hosted subtitles for a video library: faster-whisper transcribes, Ollama optionally translates" \
       org.opencontainers.image.source="https://github.com/Anastylosis/Scriptorium" \
       org.opencontainers.image.licenses="GPL-3.0-only"
 
