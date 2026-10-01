@@ -4,27 +4,11 @@ Set `WATCH_DIRS` and there is no Stash in the picture: the worker walks the
 mount, transcribes what it finds, and writes the subtitle beside the video.
 Nothing else changes — same models, same marker, same status page.
 
-```yaml
-services:
-  scriptorium:
-    image: ghcr.io/anastylosis/scriptorium:latest
-    volumes:
-      - /path/to/your/videos:/media
-      - scriptorium-state:/state       # small; holds the ledger
-      - scriptorium-models:/models
-    ports:
-      - "8088:8088"
-    environment:
-      - WATCH_DIRS=/media
-    restart: unless-stopped
+[`docker-compose.folder.example.yml`](../docker-compose.folder.example.yml)
+is the whole setup: mount your videos at `/media`, keep `/state` on a volume
+(it holds the ledger), and `WATCH_DIRS=/media` switches folder mode on.
 
-volumes:
-  scriptorium-state:
-  scriptorium-models:
-```
-
-`docker-compose.example.yml` carries the same service, commented out, as
-`scriptorium-folder`. `WATCH_DIRS` takes several directories, comma-separated.
+`WATCH_DIRS` takes several directories, comma-separated.
 
 `STASH_URL` must be left unset — it has a default, so setting both is refused
 rather than guessed at.

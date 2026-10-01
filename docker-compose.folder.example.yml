@@ -1,25 +1,21 @@
-# Stash mode. No Stash? Use docker-compose.folder.example.yml instead.
+# Folder mode: no Stash. It watches a mount, and an empty file named subs.en
+# in a folder asks for English subtitles for every video in it and below.
+# Using Stash instead? See docker-compose.example.yml.
 services:
   scriptorium:
     image: ghcr.io/anastylosis/scriptorium:latest
-    # build: .
     container_name: scriptorium
     volumes:
-      # Must resolve to the same container path Stash uses, or set PATH_FROM/PATH_TO.
-      - /path/to/your/videos:/data
+      - /path/to/your/videos:/media
+      # Small; holds the ledger that stops a video being done twice.
+      - scriptorium-state:/state
       - scriptorium-models:/models
     ports:
       - "8088:8088"
     environment:
-      - STASH_URL=http://stash:9999
-      # Only needed if authentication is enabled: Settings > Security > API Key
-      - STASH_API_KEY=
-      - MODEL=large-v3-turbo
-      - COMPUTE_TYPE=int8
-      - THREADS=6
-      - POLL_SECONDS=120
-      # Any subs:<lang> tag you create in Stash is picked up automatically.
-      # Set REQUEST_TAGS to a fixed list only if you want to restrict that.
+      - WATCH_DIRS=/media
+      # With no subs.<lang> marker anywhere, transcribe whatever is spoken.
+      - WATCH_LANGS=auto
       # Uncomment together with the ollama service below to enable
       # translation into languages Whisper cannot produce directly.
       # - OLLAMA_URL=http://ollama:11434
@@ -39,4 +35,5 @@ services:
 
 volumes:
   scriptorium-models:
+  scriptorium-state:
   ollama:

@@ -40,38 +40,13 @@ download is paid for once. Drop `RUN_ONCE=1` to leave it watching.
 
 ## Keep it running on a folder
 
-Get the example compose file:
+Get the folder compose file, set the one path, and start it:
 
 ```sh
-curl -O https://raw.githubusercontent.com/Anastylosis/Scriptorium/master/docker-compose.example.yml
-mv docker-compose.example.yml docker-compose.yml
-$EDITOR docker-compose.yml
+curl -o docker-compose.yml https://raw.githubusercontent.com/Anastylosis/Scriptorium/master/docker-compose.folder.example.yml
+$EDITOR docker-compose.yml     # change /path/to/your/videos
 docker compose up -d
 ```
-
-In it, remove the Stash service and uncomment `scriptorium-folder`, which
-amounts to:
-
-```yaml
-services:
-  scriptorium:
-    image: ghcr.io/anastylosis/scriptorium:latest
-    volumes:
-      - /path/to/your/videos:/media
-      - scriptorium-state:/state       # small; holds the ledger
-      - scriptorium-models:/models
-    ports:
-      - "8088:8088"
-    environment:
-      - WATCH_DIRS=/media
-    restart: unless-stopped
-
-volumes:
-  scriptorium-state:
-  scriptorium-models:
-```
-
-Leave `STASH_URL` unset; setting both is refused.
 
 **Asking for a language** is an empty file:
 
