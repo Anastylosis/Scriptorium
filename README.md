@@ -42,8 +42,9 @@ docker run --rm -p 8088:8088 \
 That transcribes whatever is spoken in each file, writes the subtitle beside
 it, and exits. The first run downloads the model — about 1.6 GB for the
 default `large-v3-turbo` — into the `scriptorium-models` volume, so it is
-paid for once. After that, expect roughly 5–10× realtime on a modern CPU: a
-40-minute scene in 4–8 minutes, using about 2 GB of RAM. Drop `RUN_ONCE=1`
+paid for once. It is CPU-only (there is no GPU path), at roughly 5–10×
+realtime on a modern CPU: a 40-minute scene in 4–8 minutes, using about 2 GB
+of RAM. Drop `RUN_ONCE=1`
 to leave it watching, and see
 [Without Stash](#without-stash-watching-a-folder) for asking for particular
 languages.
