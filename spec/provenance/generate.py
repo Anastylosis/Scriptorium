@@ -13,7 +13,8 @@ than editing an existing one; if this script's output for an existing fixture
 changes, that is a wire-format change and every consumer needs updating in
 the same release.
 
-See SPEC.md for the contract itself, and README.md for who consumes it.
+See SPEC.md for the contract itself, and docs/generated-subtitles.md for who
+consumes it.
 """
 
 import pathlib

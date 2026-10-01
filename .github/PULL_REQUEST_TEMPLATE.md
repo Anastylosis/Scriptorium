@@ -14,7 +14,7 @@
 
 - [ ] `make test` passes (ruff + pytest)
 - [ ] New config value? Added to `config.py`, the env alias test, and the
-      README's knobs table
+      table in `docs/configuration.md`
 - [ ] Changed how a subtitle file is written? Checked the output actually
       attaches in Stash, not just that the test passes
 - [ ] `make image` builds

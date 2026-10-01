@@ -7,8 +7,9 @@ subtitles beside the video, and swaps the tag for `subs:done` / `subs:failed`.
 With `WATCH_DIRS` set and no Stash, it watches a mount instead: `subs.<lang>`
 marker files carry the request and a ledger carries `subs:done`.
 
-Docker only. Python 3.12. GPL-3.0-only. `README.md` is for users; `PLAN.md`
-(untracked) holds working notes.
+Docker only. Python 3.12. GPL-3.0-only. `README.md` is the short user entry
+point and `docs/` the user reference; `PLAN.md` (untracked) holds working
+notes.
 
 ## Commands
 
@@ -152,8 +153,8 @@ WATCH_MIN_AGE=0 MODEL=tiny RUN_ONCE=1`, and the ledger to read afterwards.
 - No "phase" language in commits or docs.
 - Commit messages: imperative subject, then prose naming what was wrong and
   why the fix is shaped as it is.
-- A new config value needs `config.py`, the env alias test, and the README
-  knobs table.
+- A new config value needs `config.py`, the env alias test, and the table in
+  `docs/configuration.md`.
 - Backward compatibility matters; people are running this. `OVERWRITE` still
   means `REGENERATE=always`, and `REQUEST_TAGS` at the old shipped default is
   treated as copied rather than chosen.
