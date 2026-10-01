@@ -432,12 +432,12 @@ you run the model. Qwen3 is released under Apache-2.0. If that
 matters for your library, set `OLLAMA_MODEL=qwen3:8b`; it uses the JSON
 protocol below and needs no other change.
 
-TranslateGemma is translation-only — it won't return structured JSON. The script
+TranslateGemma is translation-only — it won't return structured JSON. The worker
 detects this from the model name and switches to a line-oriented protocol
 automatically. Override with `TRANSLATE_MODE=json` or `TRANSLATE_MODE=lines` if
 you use a model whose name doesn't give it away.
 
-If line counts come back mismatched, the script re-runs that batch one line at a
+If line counts come back mismatched, the worker re-runs that batch one line at a
 time rather than letting subtitle alignment drift — slower, but it can't
 silently shift your timings.
 
@@ -509,8 +509,10 @@ built in:
   compression ratios, known junk phrases ("Subtitles by...", "Thanks for
   watching", URLs), and any line repeated three times running.
 
-Add your own patterns to `JUNK_PATTERNS` in the script if you see recurring
-artefacts specific to your files.
+The list is `JUNK_PATTERNS` in `scriptorium/asr.py`. It is not configurable at
+runtime, so adding patterns for recurring artefacts specific to your files
+means editing that file and building your own image (`make image`, or
+`build: .` in the compose file).
 
 A fourth defence is about timing rather than text. Because the VAD decodes a
 timeline with the silence cut out, a segment's *end* is restored to the far
