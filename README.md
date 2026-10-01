@@ -424,6 +424,13 @@ startup and pulls it over the API if missing, logging progress as it goes.
 | `translategemma:12b` | ~8 GB | Noticeably better on idiom and register. Roughly 3x slower on CPU. |
 | `qwen3:8b` | ~5 GB | Generalist. Handles the batched-context prompt better; useful if you want to tweak the prompt for tone. |
 
+Licences differ. TranslateGemma's weights come under Google's
+[Gemma Terms of Use](https://ai.google.dev/gemma/terms), which is not an
+open-source licence and binds you to a prohibited-use policy for as long as
+you run the model. Qwen3 is released under Apache-2.0. If that
+matters for your library, set `OLLAMA_MODEL=qwen3:8b`; it uses the JSON
+protocol below and needs no other change.
+
 TranslateGemma is translation-only — it won't return structured JSON. The script
 detects this from the model name and switches to a line-oriented protocol
 automatically. Override with `TRANSLATE_MODE=json` or `TRANSLATE_MODE=lines` if
