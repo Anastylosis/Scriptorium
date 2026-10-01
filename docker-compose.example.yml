@@ -41,14 +41,14 @@ services:
   #   restart: unless-stopped
 
   # Optional. Start with: docker compose --profile translate up -d
+  # The worker reaches it as http://ollama:11434 over the compose network, so
+  # no port is published: Ollama's API has no authentication.
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.35.0
     container_name: ollama
     profiles: ["translate"]
     volumes:
       - ollama:/root/.ollama
-    ports:
-      - "11434:11434"
     restart: unless-stopped
 
 volumes:
