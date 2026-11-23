@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # faster-whisper 1.2.1 calls av.open(metadata_errors=...), removed in av 19.
+      - dependency-name: av
+        versions: [">=19"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
